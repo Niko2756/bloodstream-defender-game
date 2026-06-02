@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bloodstream Defender</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="game-shell" aria-label="Bloodstream Defender game">
+      <canvas id="game" aria-label="Bloodstream Defender playfield"></canvas>
+
+      <section class="hud" aria-live="polite">
+        <div class="hud__stat">
+          <span class="hud__label">Score</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="health" aria-label="Health">
+          <span id="healthBar" class="health__bar"></span>
+        </div>
+        <div class="hud__controls">
+          <button id="pauseButton" class="icon-button pause-button" type="button" aria-label="Pause" aria-pressed="false" hidden>
+            <span class="pause-button__bars" aria-hidden="true">
+              <span></span>
+              <span></span>
+            </span>
+            <span id="pauseButtonText" class="pause-button__label">Pause</span>
+          </button>
+          <div class="hud__stat">
+            <span class="hud__label">Level</span>
+            <strong id="level">1</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="level-meter" aria-label="Level progress">
+        <span id="levelProgress" class="level-meter__fill"></span>
+      </section>
+
+      <section id="levelBanner" class="level-banner" aria-live="polite"></section>
+
+      <section id="startOverlay" class="overlay">
+        <h1>Bloodstream Defender</h1>
+        <button id="startButton" class="primary-action" type="button">Start Run</button>
+      </section>
+
+      <section id="pauseOverlay" class="overlay pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" hidden>
+        <div class="pause-panel">
+          <h1 id="pauseTitle">Paused</h1>
+          <div class="pause-menu">
+            <button id="resumeButton" class="menu-action menu-action--primary" type="button">Resume</button>
+            <button id="restartButton" class="menu-action menu-action--secondary" type="button">Restart Run</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./src/game.js" type="module"></script>
+  </body>
+</html>
