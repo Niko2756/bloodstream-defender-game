@@ -63,6 +63,7 @@ const state = {
   levelGoal: 5,
   currentMission: null,
   levelBannerTimer: 0,
+  influenzaNoticeTimer: 0,
   levelTransitionTimer: 0,
   levelComplete: false,
   awaitingUpgrade: false,
@@ -136,6 +137,12 @@ const missionDeck = [
     term: "Chemotaxis",
     objective: "Follow the chemical trail and intercept fast-moving pathogens.",
     target: "pathogens",
+  },
+  {
+    name: "Influenza Bloom",
+    term: "Viral replication",
+    objective: "Stop influenza virions before touching pairs make more copies.",
+    target: "influenza virions",
   },
   {
     name: "Phagocyte Cleanup",
@@ -220,6 +227,9 @@ const parallaxLayers = {
 const spriteAtlas = loadGameImage(
   "./assets/sprites/processed/bloodstream-asset-atlas-transparent-no-despill.png",
 );
+const influenzaSpriteSheet = loadGameImage(
+  "./assets/sprites/processed/influenza-virion-spritesheet.png",
+);
 
 const spriteFrames = {
   whiteCell: [
@@ -241,6 +251,12 @@ const spriteFrames = {
     { x: 435, y: 467, w: 196, h: 186 },
     { x: 713, y: 471, w: 189, h: 182 },
     { x: 980, y: 479, w: 191, h: 173 },
+  ],
+  influenzaVirus: [
+    { x: 117, y: 159, w: 396, h: 424 },
+    { x: 621, y: 129, w: 392, h: 452 },
+    { x: 1154, y: 173, w: 386, h: 407 },
+    { x: 1653, y: 180, w: 395, h: 395 },
   ],
   redCell: [
     { x: 94, y: 674, w: 174, h: 132 },
@@ -404,8 +420,8 @@ function playPulseSfx() {
   playTone({ type: "sine", start: 240, end: 760, duration: 0.22, gain: 0.12 });
 }
 
-function drawAtlasFrame(frame, x, y, targetHeight, options = {}) {
-  if (!spriteAtlas.loaded || !frame) return false;
+function drawImageFrame(asset, frame, x, y, targetHeight, options = {}) {
+  if (!asset.loaded || !frame) return false;
 
   const {
     rotation = 0,
@@ -430,7 +446,7 @@ function drawAtlasFrame(frame, x, y, targetHeight, options = {}) {
   ctx.shadowColor = shadowColor;
   ctx.shadowBlur = shadowBlur;
   ctx.drawImage(
-    spriteAtlas.image,
+    asset.image,
     frame.x,
     frame.y,
     frame.w,
@@ -442,6 +458,10 @@ function drawAtlasFrame(frame, x, y, targetHeight, options = {}) {
   );
   ctx.restore();
   return true;
+}
+
+function drawAtlasFrame(frame, x, y, targetHeight, options = {}) {
+  return drawImageFrame(spriteAtlas, frame, x, y, targetHeight, options);
 }
 
 function distance(a, b) {
@@ -553,6 +573,7 @@ function configureLevel(level) {
   state.levelGoal = config.kills;
   state.levelKills = 0;
   state.levelTransitionTimer = 0;
+  state.influenzaNoticeTimer = 0;
   state.nextVirus = 1.05;
   state.nextPlatelet = 4.4;
   showLevelBanner(`${config.mission.name}: ${config.mission.term}`, 2.35);
@@ -736,6 +757,7 @@ function resetGame() {
   state.levelKills = 0;
   state.currentMission = getMission(1);
   state.levelTransitionTimer = 0;
+  state.influenzaNoticeTimer = 0;
   state.time = 0;
   state.scroll = 0;
   state.nextVirus = 1.25;
@@ -805,16 +827,20 @@ function updateHud() {
 
   const dashUnlocked = state.upgrades.dash > 0;
   const pulseUnlocked = state.upgrades.pulse > 0;
-  abilityDashEl.textContent = dashUnlocked
+  const dashStatus = dashUnlocked
     ? state.dashCooldown <= 0
-      ? "Dash ready"
-      : `Dash ${Math.ceil(state.dashCooldown)}s`
-    : "Dash locked";
-  abilityPulseEl.textContent = pulseUnlocked
+      ? "Ready"
+      : `${Math.ceil(state.dashCooldown)}s`
+    : "Locked";
+  const pulseStatus = pulseUnlocked
     ? state.pulseCooldown <= 0
-      ? "Pulse ready"
-      : `Pulse ${Math.ceil(state.pulseCooldown)}s`
-    : "Pulse locked";
+      ? "Ready"
+      : `${Math.ceil(state.pulseCooldown)}s`
+    : "Locked";
+  abilityDashEl.textContent = dashStatus;
+  abilityPulseEl.textContent = pulseStatus;
+  abilityDashEl.setAttribute("aria-label", `Dash ${dashStatus}`);
+  abilityPulseEl.setAttribute("aria-label", `Pulse ${pulseStatus}`);
   abilityDashEl.classList.toggle("is-ready", dashUnlocked && state.dashCooldown <= 0);
   abilityPulseEl.classList.toggle("is-ready", pulseUnlocked && state.pulseCooldown <= 0);
   abilityDashEl.classList.toggle("is-locked", !dashUnlocked);
@@ -837,16 +863,29 @@ function spawnRedCell(depth = rand(0.42, 1.12), x = state.width + rand(20, 180))
   });
 }
 
-function spawnVirus() {
+function spawnVirus(typeOverride = null, options = {}) {
   const levelBoost = Math.min(8, state.level - 1);
   const roll = Math.random();
-  let type = "basic";
-  if (roll > 0.88 && state.level > 3) {
-    type = "budding";
-  } else if (roll > 0.76 && state.level > 2) {
-    type = "tank";
-  } else if (roll > 0.52) {
-    type = "fast";
+  const mission = state.currentMission || getMission(state.level);
+  const isInfluenzaBloom = state.level >= 5 && mission.name === "Influenza Bloom";
+  let type = typeOverride || "basic";
+  if (!typeOverride) {
+    if (state.level >= 5 && (isInfluenzaBloom ? roll > 0.28 : roll > 0.84)) {
+      type = "influenza";
+    } else if (roll > 0.88 && state.level > 3) {
+      type = "budding";
+    } else if (roll > 0.76 && state.level > 2) {
+      type = "tank";
+    } else if (roll > 0.52) {
+      type = "fast";
+    }
+  }
+  if (
+    type === "influenza" &&
+    !typeOverride &&
+    getLiveInfluenzaViruses().length >= getInfluenzaCap()
+  ) {
+    type = state.level > 2 && roll > 0.62 ? "tank" : "fast";
   }
 
   const statsByType = {
@@ -886,24 +925,48 @@ function spawnVirus() {
       score: 55,
       spikes: 11,
     },
+    influenza: {
+      radius: rand(23, 31),
+      hp: 3,
+      speed: rand(68, 96) + levelBoost * 6,
+      color: "#ff8b2a",
+      core: "#a944d4",
+      score: 85,
+      spikes: 14,
+    },
   };
   const stats = statsByType[type];
 
-  const x = state.width + stats.radius + rand(15, 110);
-  const spriteGroup = type === "basic" || type === "budding" ? "greenVirus" : "purpleVirus";
-  state.viruses.push({
+  const x = options.x ?? state.width + stats.radius + rand(15, 110);
+  const spriteGroup =
+    type === "influenza"
+      ? "influenzaVirus"
+      : type === "basic" || type === "budding"
+        ? "greenVirus"
+        : "purpleVirus";
+  const virus = {
     ...stats,
     type,
     spriteGroup,
     frameIndex: randomFrameIndex(spriteGroup),
     x,
-    y: rand(topWallAt(x) + stats.radius + 22, bottomWallAt(x) - stats.radius - 22),
+    y:
+      options.y ??
+      rand(topWallAt(x) + stats.radius + 22, bottomWallAt(x) - stats.radius - 22),
+    speed: options.speed ?? stats.speed,
     wobble: rand(0, TAU),
-    wobbleSpeed: rand(1.4, 2.5),
+    wobbleSpeed: type === "influenza" ? rand(1.0, 1.9) : rand(1.4, 2.5),
+    replicateCooldown:
+      type === "influenza" ? options.replicateCooldown ?? rand(0.25, 0.65) : 0,
+    spreadVx: options.spreadVx ?? 0,
+    spreadVy: options.spreadVy ?? 0,
+    spreadTimer: options.spreadTimer ?? 0,
     hit: 0,
     angle: rand(0, TAU),
     spin: rand(-1.4, 1.4),
-  });
+  };
+  state.viruses.push(virus);
+  return virus;
 }
 
 function spawnVirusFragment(parent, direction) {
@@ -962,6 +1025,8 @@ function updateLevelTimers(dt) {
       levelBannerEl.classList.remove("is-visible");
     }
   }
+
+  state.influenzaNoticeTimer = Math.max(0, state.influenzaNoticeTimer - dt);
 
   if (state.levelTransitionTimer > 0) {
     state.levelTransitionTimer = Math.max(0, state.levelTransitionTimer - dt);
@@ -1045,7 +1110,14 @@ function chooseLockTarget() {
     const closeness = 1 - clamp(dist / lockRange, 0, 1);
     const laneMatch = 1 - clamp(Math.abs(dy) / verticalRange, 0, 1);
     const aheadBonus = dx > 0 ? 1 : 0.28;
-    const typeBonus = virus.type === "fast" ? 0.45 : virus.type === "tank" ? 0.25 : 0;
+    const typeBonus =
+      virus.type === "influenza"
+        ? 1.1
+        : virus.type === "fast"
+          ? 0.45
+          : virus.type === "tank"
+            ? 0.25
+            : 0;
     const stickiness = state.lockTarget === virus ? 1.8 : 0;
     const behindPenalty = dx < 0 ? Math.abs(dx) * 0.018 : 0;
     const score = closeness * 5 + laneMatch * 3.2 + aheadBonus + typeBonus + stickiness - behindPenalty;
@@ -1418,11 +1490,147 @@ function updateShots(dt) {
   );
 }
 
+function getInfluenzaCap() {
+  if (state.level < 5) return 0;
+  return Math.min(30, 12 + Math.max(0, state.level - 5) * 3);
+}
+
+function getLiveInfluenzaViruses() {
+  return state.viruses.filter(
+    (virus) => virus.type === "influenza" && !virus.dead && virus.hp > 0,
+  );
+}
+
+function nudgeInfluenzaTowardNearest(virus, dt) {
+  let nearest = null;
+  let nearestDist = Infinity;
+
+  for (const other of state.viruses) {
+    if (other === virus || other.type !== "influenza" || other.dead || other.hp <= 0) continue;
+    const dist = distance(virus, other);
+    if (dist < nearestDist && dist < 290) {
+      nearest = other;
+      nearestDist = dist;
+    }
+  }
+
+  if (!nearest || nearestDist <= 1) return;
+
+  const spreadResistance = virus.spreadTimer > 0 ? 0.35 : 1;
+  const pull = 28 * spreadResistance * dt * (1 - clamp(nearestDist / 290, 0, 1));
+  virus.x += ((nearest.x - virus.x) / nearestDist) * pull;
+  virus.y += ((nearest.y - virus.y) / nearestDist) * pull;
+}
+
+function addInfluenzaSpread(virus, angle, speed, duration) {
+  virus.spreadVx = clamp((virus.spreadVx ?? 0) + Math.cos(angle) * speed, -170, 170);
+  virus.spreadVy = clamp((virus.spreadVy ?? 0) + Math.sin(angle) * speed, -150, 150);
+  virus.spreadTimer = Math.max(virus.spreadTimer ?? 0, duration);
+}
+
+function updateInfluenzaSpread(virus, dt) {
+  if ((virus.spreadTimer ?? 0) <= 0) return;
+
+  const fade = clamp(virus.spreadTimer / 1.25, 0, 1);
+  virus.x += (virus.spreadVx ?? 0) * fade * dt;
+  virus.y += (virus.spreadVy ?? 0) * fade * dt;
+  virus.spreadTimer = Math.max(0, virus.spreadTimer - dt);
+
+  const damping = Math.pow(0.3, dt);
+  virus.spreadVx *= damping;
+  virus.spreadVy *= damping;
+  if (virus.spreadTimer === 0) {
+    virus.spreadVx = 0;
+    virus.spreadVy = 0;
+  }
+}
+
+function spawnInfluenzaCopy(parent, partner, angleOffset) {
+  const midX = (parent.x + partner.x) * 0.5;
+  const midY = (parent.y + partner.y) * 0.5;
+  const angle = Math.atan2(partner.y - parent.y, partner.x - parent.x) + angleOffset;
+  const radius = 27;
+  const x = clamp(midX + Math.cos(angle) * 54, 74, state.width + 110);
+  const y = clampToVessel(x, midY + Math.sin(angle) * 54, radius);
+  const spreadSpeed = rand(86, 124);
+  return spawnVirus("influenza", {
+    x,
+    y,
+    replicateCooldown: rand(0.85, 1.25),
+    spreadVx: Math.cos(angle) * spreadSpeed,
+    spreadVy: Math.sin(angle) * spreadSpeed,
+    spreadTimer: rand(1.05, 1.45),
+  });
+}
+
+function replicateInfluenzaViruses() {
+  const influenza = getLiveInfluenzaViruses();
+  const cap = getInfluenzaCap();
+  if (influenza.length < 2 || influenza.length + 2 > cap) return;
+
+  for (let i = 0; i < influenza.length - 1; i += 1) {
+    const first = influenza[i];
+    if (first.replicateCooldown > 0) continue;
+
+    for (let j = i + 1; j < influenza.length; j += 1) {
+      const second = influenza[j];
+      if (second.replicateCooldown > 0) continue;
+      if (distance(first, second) > (first.radius + second.radius) * 1.42) continue;
+
+      first.replicateCooldown = rand(1.45, 2.15);
+      second.replicateCooldown = rand(1.45, 2.15);
+      const pairAngle = Math.atan2(second.y - first.y, second.x - first.x);
+      addInfluenzaSpread(first, pairAngle + Math.PI, rand(42, 66), rand(0.8, 1.05));
+      addInfluenzaSpread(second, pairAngle, rand(42, 66), rand(0.8, 1.05));
+      spawnInfluenzaCopy(first, second, Math.PI * 0.5);
+      spawnInfluenzaCopy(first, second, -Math.PI * 0.5);
+
+      const burstX = (first.x + second.x) * 0.5;
+      const burstY = (first.y + second.y) * 0.5;
+      state.shake = Math.max(state.shake, 0.16);
+      addParticleBurst(burstX, burstY, "#ff9b2f", 16, 120);
+
+      if (state.influenzaNoticeTimer === 0) {
+        showLevelBanner("Influenza virions replicated", 1.35);
+        state.influenzaNoticeTimer = 3.8;
+      }
+
+      return;
+    }
+  }
+}
+
+function separateInfluenzaViruses(dt) {
+  const influenza = getLiveInfluenzaViruses();
+  for (let i = 0; i < influenza.length - 1; i += 1) {
+    const first = influenza[i];
+    for (let j = i + 1; j < influenza.length; j += 1) {
+      const second = influenza[j];
+      const minDist = (first.radius + second.radius) * 1.04;
+      const dist = distance(first, second);
+      if (dist <= 1 || dist >= minDist) continue;
+
+      const push = (1 - dist / minDist) * 72 * dt;
+      const dx = (second.x - first.x) / dist;
+      const dy = (second.y - first.y) / dist;
+      first.x -= dx * push;
+      first.y = clampToVessel(first.x, first.y - dy * push, first.radius);
+      second.x += dx * push;
+      second.y = clampToVessel(second.x, second.y + dy * push, second.radius);
+    }
+  }
+}
+
 function updateViruses(dt, worldSpeed) {
   for (const virus of state.viruses) {
     if (virus.dead) continue;
     virus.x -= (virus.speed + worldSpeed * 0.45) * dt;
     virus.y += Math.sin(state.time * virus.wobbleSpeed + virus.wobble) * 26 * dt;
+    if (virus.type === "influenza") {
+      virus.replicateCooldown = Math.max(0, (virus.replicateCooldown ?? 0) - dt);
+      updateInfluenzaSpread(virus, dt);
+      nudgeInfluenzaTowardNearest(virus, dt);
+    }
     virus.y = clampToVessel(virus.x, virus.y, virus.radius);
     virus.angle += virus.spin * dt;
     virus.hit = Math.max(0, virus.hit - dt);
@@ -1431,6 +1639,8 @@ function updateViruses(dt, worldSpeed) {
   state.viruses = state.viruses.filter(
     (virus) => !virus.dead && virus.x > -virus.radius - 80 && virus.hp > 0,
   );
+  separateInfluenzaViruses(dt);
+  replicateInfluenzaViruses();
 }
 
 function updateRedCells(dt, worldSpeed) {
@@ -1488,7 +1698,12 @@ function checkCollisions() {
   for (const virus of state.viruses) {
     if (virus.dead) continue;
     if (distance(player, virus) < player.radius * 0.82 + virus.radius * 0.66) {
-      hurtPlayer(virus.type === "tank" ? 22 : 14, virus.x, virus.y, virus.color);
+      hurtPlayer(
+        virus.type === "tank" ? 22 : virus.type === "influenza" ? 16 : 14,
+        virus.x,
+        virus.y,
+        virus.color,
+      );
       virus.hp = 0;
       virus.dead = true;
     }
@@ -1928,19 +2143,28 @@ function drawVirusTypeOverlay(virus) {
 function drawVirus(virus) {
   const frames = spriteFrames[virus.spriteGroup] || spriteFrames.greenVirus;
   const frame = frames[(virus.frameIndex ?? 0) % frames.length];
+  const spriteAsset = virus.spriteGroup === "influenzaVirus" ? influenzaSpriteSheet : spriteAtlas;
   const hitPulse = virus.hit > 0 ? 1 + Math.sin(state.time * 60) * 0.06 : 1;
-  drawVirusReadabilityHalo(virus);
-  const spriteDrawn = drawAtlasFrame(frame, virus.x, virus.y, virus.radius * 2.92, {
+  if (virus.type !== "influenza") {
+    drawVirusReadabilityHalo(virus);
+  }
+  const spriteDrawn = drawImageFrame(spriteAsset, frame, virus.x, virus.y, virus.radius * 2.92, {
     rotation: virus.angle,
     alpha: virus.hit > 0 ? 0.72 + Math.sin(state.time * 60) * 0.2 : 1,
     shadowColor: virus.color,
-    shadowBlur: virus.type === "tank" || virus.type === "budding" ? 18 : 11,
+    shadowBlur:
+      virus.type === "influenza" || virus.type === "tank" || virus.type === "budding"
+        ? 18
+        : 11,
     pulse: hitPulse,
   });
   if (spriteDrawn) {
-    drawVirusTypeOverlay(virus);
+    if (virus.type !== "influenza") {
+      drawVirusTypeOverlay(virus);
+    }
     return;
   }
+  if (virus.type === "influenza") return;
 
   ctx.save();
   ctx.translate(virus.x, virus.y);

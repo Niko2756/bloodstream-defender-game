@@ -7,6 +7,423 @@
   --cyan: #66f2ff;
   --cyan-deep: #1eb6ce;
   --danger: #ff6a7c;
+  --hud-gold: #ffd76e;
+  --hud-cranberry: #481129;
+  --hud-shadow: rgba(10, 0, 8, 0.48);
+}
+
+/* Final HUD layer: generated transparent ornaments plus compact readable panels. */
+.hud {
+  inset: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) auto
+    max(14px, env(safe-area-inset-left));
+  grid-template-columns: 146px minmax(245px, 360px) auto;
+  gap: 10px;
+}
+
+.hud__stat,
+.health,
+.mission-panel,
+.level-meter {
+  overflow: visible;
+  isolation: isolate;
+}
+
+.hud__stat {
+  min-height: 50px;
+  padding: 8px 12px 8px 58px;
+  border: 1px solid rgba(102, 242, 255, 0.42);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(8, 45, 54, 0.78), rgba(48, 9, 26, 0.78)),
+    rgba(20, 5, 15, 0.58);
+}
+
+.hud__stat::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: auto;
+  left: -8px;
+  display: block;
+  width: 62px;
+  height: 62px;
+  border: 0;
+  border-radius: 0;
+  background: url("./assets/ui/hud-orn-score.png") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.hud__stat::after,
+.health::after,
+.mission-panel::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: block;
+  width: 58px;
+  height: 58px;
+  background: url("./assets/ui/hud-orn-red-corner.png") center / contain no-repeat;
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+.hud__stat--score {
+  width: 146px;
+}
+
+.hud__stat--score .hud__label,
+.hud__stat--level .hud__label,
+.mission-panel__label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
+.hud__stat strong,
+.hud__stat--score strong,
+.hud__stat--level strong {
+  position: static;
+  display: block;
+  color: #fff7d3;
+  font-size: 18px;
+  line-height: 1;
+  text-align: left;
+}
+
+.hud__stat--level {
+  width: 70px;
+  min-height: 56px;
+  padding: 8px 5px 7px;
+  border: 0;
+  background: url("./assets/ui/hud-orn-level.png") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.hud__stat--level::before,
+.hud__stat--level::after {
+  display: none;
+}
+
+.hud__stat--level strong,
+.hud__stat--level .hud__label {
+  text-align: center;
+}
+
+.health {
+  width: min(360px, 100%);
+  height: 50px;
+  border-color: rgba(102, 242, 255, 0.44);
+  background:
+    linear-gradient(90deg, rgba(8, 49, 57, 0.84), rgba(48, 9, 26, 0.76)),
+    rgba(18, 5, 15, 0.58);
+}
+
+.health::after {
+  top: -8px;
+  right: auto;
+  bottom: auto;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  background-image: url("./assets/ui/hud-orn-health.png");
+  opacity: 1;
+}
+
+.health::before {
+  content: "Health";
+  position: absolute;
+  top: 8px;
+  left: 62px;
+  color: #66f2ff;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.34);
+}
+
+.health__bar {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  top: 25px;
+  right: 12px;
+  bottom: 9px;
+  left: 62px;
+  width: auto;
+  max-width: none;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #56efff, #b5ffe9 52%, var(--hud-gold));
+  box-shadow:
+    0 0 18px rgba(102, 242, 255, 0.42),
+    inset 0 0 10px rgba(255, 255, 255, 0.16);
+  transform-origin: left center;
+  transition: transform 160ms ease;
+}
+
+.health__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+  opacity: 0.62;
+}
+
+.mission-panel {
+  top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+  width: min(330px, calc(100vw - 32px));
+  padding: 12px 12px 12px 62px;
+  border-color: rgba(102, 242, 255, 0.36);
+  background:
+    linear-gradient(135deg, rgba(42, 8, 25, 0.88), rgba(16, 45, 52, 0.62)),
+    rgba(18, 5, 15, 0.62);
+}
+
+.mission-panel::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  background: url("./assets/ui/hud-orn-mission.png") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.mission-panel::after {
+  width: 50px;
+  height: 50px;
+}
+
+.mission-panel strong {
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+.mission-panel p {
+  display: -webkit-box;
+  max-width: 250px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.mission-panel__meta {
+  gap: 4px;
+}
+
+.mission-panel__meta span,
+#abilityDash,
+#abilityPulse {
+  width: auto;
+  min-height: 20px;
+  padding: 3px 7px;
+  font-size: 9px;
+}
+
+.mission-panel__meta::after {
+  content: "";
+  flex-basis: 100%;
+  height: 9px;
+  margin-top: -1px;
+  background: url("./assets/ui/hud-orn-gold-divider.png") left center / 150px auto no-repeat;
+  opacity: 0.72;
+}
+
+.level-meter {
+  height: 17px;
+  overflow: hidden;
+  border-color: rgba(102, 242, 255, 0.36);
+}
+
+.level-meter::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(340px, 50vw);
+  height: 34px;
+  background: url("./assets/ui/hud-orn-cyan-divider.png") center / contain no-repeat;
+  opacity: 0.76;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.level-meter__fill {
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .hud {
+    grid-template-columns: 102px minmax(116px, 1fr) auto;
+    gap: 6px;
+  }
+
+  .hud__stat {
+    min-height: 42px;
+    padding: 6px 8px 6px 42px;
+  }
+
+  .hud__stat::before,
+  .health::after,
+  .mission-panel::before {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hud__stat--score {
+    width: 102px;
+  }
+
+  .hud__stat--level {
+    width: 54px;
+    min-height: 46px;
+    padding: 6px 4px;
+  }
+
+  .health {
+    width: min(210px, 100%);
+    height: 42px;
+  }
+
+  .health::before {
+    left: 48px;
+  }
+
+  .health__bar {
+    right: 9px;
+    bottom: 8px;
+    left: 48px;
+  }
+
+  .mission-panel {
+    width: min(300px, calc(100vw - 18px));
+    padding: 10px 10px 10px 48px;
+  }
+
+  .mission-panel p {
+    max-width: none;
+  }
+}
+
+/* Final health fill override for the applied generated HUD. */
+.health::before {
+  content: "Health";
+  position: absolute;
+  top: 8px;
+  left: 62px;
+  color: #66f2ff;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.34);
+}
+
+.health__bar {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  top: 25px;
+  right: 12px;
+  bottom: 9px;
+  left: 62px;
+  width: auto;
+  max-width: none;
+  min-height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #56efff, #b5ffe9 52%, var(--hud-gold));
+  box-shadow:
+    0 0 18px rgba(102, 242, 255, 0.42),
+    inset 0 0 10px rgba(255, 255, 255, 0.16);
+  transform-origin: left center;
+  transition: transform 160ms ease;
+}
+
+.health__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+  opacity: 0.62;
+}
+
+@media (max-width: 640px) {
+  .health::before {
+    left: 48px;
+  }
+
+  .health__bar {
+    right: 9px;
+    bottom: 8px;
+    left: 48px;
+    min-height: 10px;
+  }
+}
+
+/* Final health fill override for the applied generated HUD. */
+.health::before {
+  content: "Health";
+  position: absolute;
+  top: 8px;
+  left: 62px;
+  color: #66f2ff;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.34);
+}
+
+.health__bar {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  top: 25px;
+  right: 12px;
+  bottom: 9px;
+  left: 62px;
+  width: auto;
+  max-width: none;
+  min-height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #56efff, #b5ffe9 52%, var(--hud-gold));
+  box-shadow:
+    0 0 18px rgba(102, 242, 255, 0.42),
+    inset 0 0 10px rgba(255, 255, 255, 0.16);
+  transform-origin: left center;
+  transition: transform 160ms ease;
+}
+
+.health__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+  opacity: 0.62;
+}
+
+@media (max-width: 640px) {
+  .health::before {
+    left: 48px;
+  }
+
+  .health__bar {
+    right: 9px;
+    bottom: 8px;
+    left: 48px;
+    min-height: 10px;
+  }
 }
 
 * {
@@ -55,31 +472,50 @@ button {
 
 .hud {
   position: absolute;
-  inset: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) auto
-    max(16px, env(safe-area-inset-left));
+  inset: max(10px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) auto
+    max(14px, env(safe-area-inset-left));
   z-index: 2;
   display: grid;
-  grid-template-columns: 86px 1fr auto;
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: 168px minmax(280px, 520px) auto;
+  align-items: start;
+  gap: 10px;
   pointer-events: none;
 }
 
-.hud__stat,
-.health {
-  min-height: 42px;
-  border: 1px solid var(--panel-border);
-  background: var(--panel);
-  box-shadow: 0 12px 32px rgba(12, 2, 10, 0.28);
-  backdrop-filter: blur(12px);
+.hud__stat {
+  position: relative;
+  display: block;
+  min-height: 0;
+  border: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: var(--text);
+  filter: drop-shadow(0 12px 18px var(--hud-shadow));
 }
 
-.hud__stat {
-  display: grid;
-  align-content: center;
-  gap: 1px;
-  padding: 7px 12px;
-  border-radius: 8px;
+.hud__stat--score {
+  width: 168px;
+  height: 70px;
+  background-image: url("./assets/ui/hud-score-frame.png");
+}
+
+.hud__stat--level {
+  width: 86px;
+  height: 80px;
+  background-image: url("./assets/ui/hud-level-badge.png");
+}
+
+.hud__stat--score .hud__label,
+.hud__stat--level .hud__label,
+.mission-panel__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .hud__label {
@@ -91,20 +527,37 @@ button {
 }
 
 .hud__stat strong {
-  font-size: 19px;
+  position: absolute;
+  color: #fff7d3;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
+  text-shadow:
+    0 0 11px rgba(255, 215, 110, 0.42),
+    0 2px 8px rgba(12, 0, 8, 0.66);
+}
+
+.hud__stat--score strong {
+  left: 78px;
+  right: 24px;
+  bottom: 15px;
+  font-size: 20px;
+}
+
+.hud__stat--level strong {
+  left: 0;
+  right: 0;
+  top: 45px;
+  font-size: 22px;
   line-height: 1;
 }
 
 .hud__controls {
   display: grid;
-  grid-template-columns: 82px 76px;
-  align-items: center;
+  grid-template-columns: 92px 86px;
+  align-items: start;
   justify-self: end;
-  gap: 10px;
-}
-
-.hud__controls .hud__stat {
-  width: 76px;
+  gap: 8px;
 }
 
 .icon-button {
@@ -141,17 +594,38 @@ button {
 
 .pause-button {
   display: flex;
-  width: 82px;
-  min-width: 82px;
+  position: relative;
+  width: 92px;
+  min-width: 92px;
+  height: 58px;
+  padding: 0 10px 0 46px;
+  border: 0;
+  background:
+    url("./assets/ui/hud-pause-medallion.png") left center / 56px 58px no-repeat,
+    linear-gradient(90deg, rgba(21, 8, 19, 0.22), rgba(37, 9, 25, 0.86)) right center /
+      calc(100% - 40px) 34px no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 12px 18px var(--hud-shadow));
+  backdrop-filter: none;
+}
+
+.pause-button::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  width: calc(100% - 42px);
+  height: 34px;
+  border: 1px solid rgba(102, 242, 255, 0.34);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  box-shadow:
+    inset 0 0 18px rgba(102, 242, 255, 0.09),
+    0 0 16px rgba(102, 242, 255, 0.09);
+  pointer-events: none;
 }
 
 .pause-button__bars {
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: repeat(2, 4px);
-  gap: 4px;
-  width: 12px;
-  height: 15px;
+  display: none;
 }
 
 .pause-button__bars span {
@@ -162,56 +636,83 @@ button {
 }
 
 .pause-button__label {
-  color: #fff4ee;
-  font-size: 11px;
+  color: #dfffff;
+  font-size: 10px;
   font-weight: 850;
   letter-spacing: 0;
   line-height: 1;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.36);
+}
+
+.pause-button:hover,
+.pause-button:focus-visible,
+.pause-button.is-active {
+  border: 0;
+  box-shadow: none;
+  filter:
+    drop-shadow(0 12px 18px var(--hud-shadow))
+    drop-shadow(0 0 12px rgba(102, 242, 255, 0.28));
+  outline: none;
 }
 
 .health {
   position: relative;
   justify-self: center;
-  width: min(240px, 100%);
+  width: min(500px, 100%);
+  height: 74px;
   overflow: hidden;
-  border-radius: 999px;
+  border: 0;
+  background: url("./assets/ui/hud-health-frame.png") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 12px 18px var(--hud-shadow));
 }
 
 .health::before {
-  content: "";
-  position: absolute;
-  inset: 7px;
-  border-radius: inherit;
-  background: rgba(28, 6, 16, 0.72);
+  content: none;
 }
 
 .health__bar {
   position: absolute;
-  inset: 7px;
-  width: 100%;
-  max-width: calc(100% - 14px);
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--cyan), #9fffe4 48%, #ffe38f);
-  box-shadow: 0 0 18px rgba(102, 242, 255, 0.38);
+  top: 41%;
+  right: 6.5%;
+  bottom: 23%;
+  left: 20%;
+  width: auto;
+  max-width: none;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #56efff, #b5ffe9 52%, var(--hud-gold));
+  box-shadow:
+    0 0 18px rgba(102, 242, 255, 0.42),
+    inset 0 0 10px rgba(255, 255, 255, 0.16);
   transform-origin: left center;
   transition: transform 160ms ease;
+}
+
+.health__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+  opacity: 0.62;
 }
 
 .mission-panel {
   position: absolute;
   left: max(16px, env(safe-area-inset-left));
-  top: calc(max(16px, env(safe-area-inset-top)) + 56px);
+  top: calc(max(10px, env(safe-area-inset-top)) + 72px);
   z-index: 2;
   display: grid;
   gap: 5px;
-  width: min(360px, calc(100vw - 32px));
-  padding: 11px 14px;
-  border: 1px solid rgba(255, 206, 196, 0.18);
-  border-radius: 8px;
+  width: min(470px, calc(100vw - 32px));
+  min-height: 154px;
+  padding: 55px 36px 22px 82px;
+  border: 0;
+  border-radius: 0;
   color: var(--text);
-  background: rgba(25, 6, 16, 0.46);
-  box-shadow: 0 12px 34px rgba(12, 2, 10, 0.2);
-  backdrop-filter: blur(12px);
+  background: url("./assets/ui/hud-mission-frame.png") center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 14px 20px var(--hud-shadow));
+  backdrop-filter: none;
   pointer-events: none;
 }
 
@@ -226,16 +727,21 @@ button {
 
 .mission-panel strong {
   display: block;
+  color: #fff7df;
   font-size: 17px;
   line-height: 1.1;
+  text-shadow:
+    0 0 14px rgba(255, 215, 110, 0.2),
+    0 2px 8px rgba(12, 0, 8, 0.66);
 }
 
 .mission-panel p {
   margin: 0;
-  color: rgba(255, 244, 238, 0.86);
+  color: rgba(255, 244, 238, 0.9);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.25;
+  max-width: 330px;
 }
 
 .mission-panel__meta {
@@ -247,14 +753,39 @@ button {
 .mission-panel__meta span {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 22px;
   padding: 3px 8px;
-  border: 1px solid rgba(255, 206, 196, 0.15);
+  border: 1px solid rgba(255, 215, 110, 0.24);
   border-radius: 999px;
-  color: rgba(255, 244, 238, 0.86);
-  background: rgba(20, 4, 13, 0.42);
+  color: #fff6d0;
+  background: rgba(28, 6, 17, 0.56);
   font-size: 10px;
   font-weight: 850;
+  text-shadow: 0 2px 8px rgba(12, 0, 8, 0.56);
+}
+
+#abilityDash,
+#abilityPulse {
+  min-height: 28px;
+  border: 0;
+  border-radius: 0;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  box-shadow: none;
+}
+
+#abilityDash {
+  width: 132px;
+  padding: 5px 16px 5px 58px;
+  background-image: url("./assets/ui/hud-dash-chip-frame.png");
+}
+
+#abilityPulse {
+  width: 174px;
+  padding: 5px 18px 5px 92px;
+  background-image: url("./assets/ui/hud-pulse-chip-frame.png");
 }
 
 .mission-panel__meta span.is-ready {
@@ -269,26 +800,33 @@ button {
 
 .level-meter {
   position: absolute;
-  left: max(18px, env(safe-area-inset-left));
-  right: max(18px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(30px, env(safe-area-inset-left));
+  right: max(30px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
   z-index: 2;
-  height: 9px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 207, 174, 0.24);
-  border-radius: 999px;
-  background: rgba(24, 5, 14, 0.46);
-  box-shadow: 0 10px 28px rgba(12, 2, 10, 0.26);
+  height: 54px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: url("./assets/ui/hud-progress-frame.png") center / 100% 100% no-repeat;
+  box-shadow: none;
+  filter: drop-shadow(0 12px 18px var(--hud-shadow));
   pointer-events: none;
 }
 
 .level-meter__fill {
+  position: absolute;
+  top: 50%;
+  right: 13.2%;
+  left: 14.8%;
   display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, #66f2ff, #b9ffe5 52%, #ffd06e);
-  box-shadow: 0 0 18px rgba(102, 242, 255, 0.28);
+  width: auto;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #66f2ff, #b9ffe5 52%, var(--hud-gold));
+  box-shadow:
+    0 0 15px rgba(102, 242, 255, 0.44),
+    0 0 22px rgba(255, 215, 110, 0.14);
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform 180ms ease;
@@ -1103,8 +1641,32 @@ button {
   }
 
   .hud {
-    grid-template-columns: 74px 1fr auto;
-    gap: 8px;
+    grid-template-columns: 116px minmax(150px, 1fr) auto;
+    gap: 6px;
+    inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) auto
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .hud__stat--score {
+    width: 116px;
+    height: 50px;
+  }
+
+  .hud__stat--score strong {
+    right: 16px;
+    bottom: 10px;
+    left: 54px;
+    font-size: 15px;
+  }
+
+  .hud__stat--level {
+    width: 56px;
+    height: 54px;
+  }
+
+  .hud__stat--level strong {
+    top: 31px;
+    font-size: 15px;
   }
 
   .level-banner {
@@ -1117,8 +1679,9 @@ button {
   .mission-panel {
     top: auto;
     bottom: calc(max(16px, env(safe-area-inset-bottom)) + 34px);
-    width: min(320px, calc(100vw - 32px));
-    padding: 9px 11px;
+    width: min(340px, calc(100vw - 18px));
+    min-height: 118px;
+    padding: 43px 23px 18px 60px;
   }
 
   .mission-panel strong {
@@ -1129,51 +1692,78 @@ button {
     font-size: 11px;
   }
 
-  .hud__stat,
-  .health {
-    min-height: 36px;
+  .mission-panel__meta {
+    gap: 4px;
   }
 
-  .hud__stat {
-    padding: 6px 9px;
-  }
-
-  .hud__label {
+  .mission-panel__meta span {
+    min-height: 20px;
     font-size: 9px;
   }
 
-  .hud__stat strong {
-    font-size: 16px;
+  #abilityDash {
+    width: 110px;
+    padding: 4px 12px 4px 47px;
+  }
+
+  #abilityPulse {
+    width: 142px;
+    padding: 4px 13px 4px 76px;
+  }
+
+  .health {
+    width: min(240px, 100%);
+    height: 50px;
   }
 
   .hud__controls {
-    grid-template-columns: 72px 64px;
-    gap: 7px;
-  }
-
-  .hud__controls .hud__stat {
-    width: 64px;
+    grid-template-columns: 48px 56px;
+    gap: 4px;
   }
 
   .icon-button {
-    width: 72px;
-    height: 38px;
-    gap: 6px;
-    padding: 0 9px;
+    width: 48px;
+    height: 48px;
+    gap: 0;
+    padding: 0;
   }
 
   .pause-button {
-    width: 72px;
-    min-width: 72px;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    background:
+      url("./assets/ui/hud-pause-medallion.png") center / 48px 48px no-repeat,
+      transparent;
+  }
+
+  .pause-button::after {
+    display: none;
   }
 
   .pause-button__bars {
-    width: 11px;
-    height: 14px;
+    display: none;
   }
 
   .pause-button__label {
-    font-size: 10px;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .level-meter {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(4px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    height: 34px;
+  }
+
+  .level-meter__fill {
+    height: 3px;
   }
 
   .pause-panel {
@@ -1300,5 +1890,972 @@ button {
   .upgrade-tip {
     width: 100%;
     font-size: 12px !important;
+  }
+}
+
+/* Generated HUD ornament integration. Text and layout stay live/readable; art is decorative. */
+.hud {
+  grid-template-columns: 146px minmax(245px, 360px) auto;
+  gap: 10px;
+}
+
+.hud__stat,
+.health,
+.mission-panel,
+.level-meter {
+  isolation: isolate;
+}
+
+.hud__stat {
+  min-height: 50px;
+  padding: 8px 12px 8px 58px;
+  border-color: rgba(102, 242, 255, 0.42);
+  background:
+    linear-gradient(90deg, rgba(8, 45, 54, 0.78), rgba(48, 9, 26, 0.78)),
+    rgba(20, 5, 15, 0.58);
+}
+
+.hud__stat::before {
+  top: -8px;
+  bottom: auto;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  border: 0;
+  border-radius: 0;
+  background: url("./assets/ui/hud-orn-score.png") center / contain no-repeat;
+  box-shadow: none;
+  z-index: 0;
+}
+
+.hud__stat::after,
+.health::after,
+.mission-panel::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 58px;
+  height: 58px;
+  background: url("./assets/ui/hud-orn-red-corner.png") center / contain no-repeat;
+  opacity: 0.84;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hud__stat .hud__label,
+.hud__stat strong,
+.health__bar,
+.mission-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+.health::before {
+  z-index: 1;
+}
+
+.hud__stat--score {
+  width: 146px;
+}
+
+.hud__stat--level {
+  width: 70px;
+  min-height: 56px;
+  padding: 8px 5px 7px;
+  border: 0;
+  background: url("./assets/ui/hud-orn-level.png") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.hud__stat--level::before,
+.hud__stat--level::after {
+  display: none;
+}
+
+.hud__stat--level .hud__label {
+  color: #ffe18a;
+}
+
+.hud__stat--score strong,
+.hud__stat--level strong {
+  font-size: 18px;
+}
+
+.health {
+  width: min(360px, 100%);
+  height: 50px;
+  padding-left: 60px;
+  border-color: rgba(102, 242, 255, 0.44);
+  background:
+    linear-gradient(90deg, rgba(8, 49, 57, 0.84), rgba(48, 9, 26, 0.76)),
+    rgba(18, 5, 15, 0.58);
+}
+
+.health::after {
+  top: -8px;
+  right: auto;
+  bottom: auto;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  background-image: url("./assets/ui/hud-orn-health.png");
+  opacity: 1;
+}
+
+.health::before {
+  left: 62px;
+}
+
+.health__bar {
+  top: 25px;
+  right: 12px;
+  bottom: 9px;
+  left: 62px;
+}
+
+.mission-panel {
+  top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+  width: min(330px, calc(100vw - 32px));
+  padding: 12px 12px 12px 62px;
+  border-color: rgba(102, 242, 255, 0.36);
+  background:
+    linear-gradient(135deg, rgba(42, 8, 25, 0.88), rgba(16, 45, 52, 0.62)),
+    rgba(18, 5, 15, 0.62);
+}
+
+.mission-panel::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  background: url("./assets/ui/hud-orn-mission.png") center / contain no-repeat;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.mission-panel::after {
+  width: 50px;
+  height: 50px;
+}
+
+.mission-panel strong {
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+.mission-panel p {
+  display: -webkit-box;
+  max-width: 250px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.mission-panel__meta {
+  gap: 4px;
+}
+
+.mission-panel__meta span,
+#abilityDash,
+#abilityPulse {
+  min-height: 20px;
+  padding: 3px 7px;
+  font-size: 9px;
+}
+
+.mission-panel__meta::after {
+  content: "";
+  flex-basis: 100%;
+  height: 9px;
+  margin-top: -1px;
+  background: url("./assets/ui/hud-orn-gold-divider.png") left center / 150px auto no-repeat;
+  opacity: 0.72;
+}
+
+.level-meter {
+  height: 17px;
+  border-color: rgba(102, 242, 255, 0.36);
+}
+
+.level-meter::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(340px, 50vw);
+  height: 34px;
+  background: url("./assets/ui/hud-orn-cyan-divider.png") center / contain no-repeat;
+  opacity: 0.76;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+
+.level-meter__fill {
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .hud {
+    grid-template-columns: 102px minmax(116px, 1fr) auto;
+    gap: 6px;
+  }
+
+  .hud__stat {
+    min-height: 42px;
+    padding: 6px 8px 6px 42px;
+  }
+
+  .hud__stat::before,
+  .health::after,
+  .mission-panel::before {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hud__stat--score {
+    width: 102px;
+  }
+
+  .hud__stat--level {
+    width: 54px;
+    min-height: 46px;
+    padding: 6px 4px;
+  }
+
+  .health {
+    width: min(210px, 100%);
+    height: 42px;
+    padding-left: 47px;
+  }
+
+  .health::before {
+    left: 48px;
+  }
+
+  .health__bar {
+    right: 9px;
+    bottom: 8px;
+    left: 48px;
+  }
+
+  .mission-panel {
+    width: min(300px, calc(100vw - 18px));
+    padding: 10px 10px 10px 48px;
+  }
+
+  .mission-panel p {
+    max-width: none;
+  }
+}
+
+/* HUD polish pass: keep the generated-art direction without stretching bitmap frames. */
+.hud {
+  inset: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) auto
+    max(14px, env(safe-area-inset-left));
+  grid-template-columns: 132px minmax(250px, 390px) auto;
+  align-items: start;
+  gap: 12px;
+}
+
+.hud__stat,
+.health,
+.mission-panel,
+.level-meter {
+  background-image: none;
+}
+
+.hud__stat {
+  display: grid;
+  align-content: center;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid rgba(102, 242, 255, 0.34);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 16% 48%, rgba(102, 242, 255, 0.28), transparent 18%),
+    linear-gradient(135deg, rgba(40, 9, 24, 0.84), rgba(23, 5, 17, 0.66));
+  box-shadow:
+    0 10px 24px rgba(10, 0, 8, 0.34),
+    inset 0 0 0 1px rgba(255, 215, 110, 0.12),
+    inset 0 0 22px rgba(102, 242, 255, 0.07);
+  filter: none;
+  overflow: hidden;
+}
+
+.hud__stat::before {
+  content: "";
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 9px;
+  width: 28px;
+  border: 1px solid rgba(255, 215, 110, 0.42);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(102, 242, 255, 0.9) 0 18%, rgba(102, 242, 255, 0.22) 20% 42%, transparent 46%),
+    rgba(25, 6, 18, 0.72);
+  box-shadow: 0 0 16px rgba(102, 242, 255, 0.24);
+}
+
+.hud__stat--score,
+.hud__stat--level {
+  width: auto;
+  height: 48px;
+  padding-left: 48px;
+}
+
+.hud__stat--level {
+  width: 78px;
+  padding: 8px 10px;
+  text-align: center;
+}
+
+.hud__stat--level::before {
+  display: none;
+}
+
+.hud__stat--score .hud__label,
+.hud__stat--level .hud__label,
+.mission-panel__label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
+.hud__label,
+.mission-panel__label {
+  color: #66f2ff;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.34);
+}
+
+.hud__stat strong,
+.hud__stat--score strong,
+.hud__stat--level strong {
+  position: static;
+  display: block;
+  color: #fff7d3;
+  font-size: 20px;
+  line-height: 1;
+  text-align: left;
+}
+
+.hud__stat--level strong {
+  text-align: center;
+}
+
+.hud__controls {
+  grid-template-columns: 78px 78px;
+  gap: 8px;
+}
+
+.pause-button {
+  width: 78px;
+  min-width: 78px;
+  height: 48px;
+  padding: 0 9px;
+  border: 1px solid rgba(102, 242, 255, 0.36);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 24% 50%, rgba(102, 242, 255, 0.32), transparent 22%),
+    linear-gradient(135deg, rgba(15, 56, 64, 0.82), rgba(35, 7, 24, 0.72));
+  box-shadow:
+    0 10px 24px rgba(10, 0, 8, 0.34),
+    inset 0 0 0 1px rgba(255, 215, 110, 0.11);
+  filter: none;
+}
+
+.pause-button::after {
+  display: none;
+}
+
+.pause-button__bars {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, 4px);
+  gap: 4px;
+  width: 12px;
+  height: 15px;
+}
+
+.pause-button:hover,
+.pause-button:focus-visible,
+.pause-button.is-active {
+  border-color: rgba(102, 242, 255, 0.66);
+  box-shadow:
+    0 0 16px rgba(102, 242, 255, 0.18),
+    0 10px 24px rgba(10, 0, 8, 0.34);
+  filter: none;
+}
+
+.health {
+  width: min(390px, 100%);
+  height: 48px;
+  border: 1px solid rgba(102, 242, 255, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(102, 242, 255, 0.12), transparent 44%),
+    linear-gradient(135deg, rgba(18, 55, 63, 0.82), rgba(43, 7, 24, 0.78));
+  box-shadow:
+    0 10px 24px rgba(10, 0, 8, 0.34),
+    inset 0 0 0 1px rgba(255, 215, 110, 0.11);
+  filter: none;
+}
+
+.health::before {
+  content: "Health";
+  position: absolute;
+  top: 7px;
+  left: 14px;
+  color: #66f2ff;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.34);
+}
+
+.health__bar {
+  top: 24px;
+  right: 12px;
+  bottom: 9px;
+  left: 12px;
+}
+
+.mission-panel {
+  top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+  width: min(350px, calc(100vw - 32px));
+  min-height: 0;
+  padding: 12px 14px 13px;
+  border: 1px solid rgba(102, 242, 255, 0.28);
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 12% 22%, rgba(102, 242, 255, 0.18), transparent 22%),
+    linear-gradient(135deg, rgba(48, 9, 25, 0.84), rgba(23, 5, 17, 0.66));
+  box-shadow:
+    0 12px 28px rgba(10, 0, 8, 0.34),
+    inset 0 0 0 1px rgba(255, 215, 110, 0.12);
+  filter: none;
+  gap: 5px;
+}
+
+.mission-panel strong {
+  font-size: 15px;
+}
+
+.mission-panel p {
+  max-width: none;
+  font-size: 11px;
+}
+
+.mission-panel__meta {
+  gap: 5px;
+}
+
+.mission-panel__meta span,
+#abilityDash,
+#abilityPulse {
+  width: auto;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 215, 110, 0.26);
+  border-radius: 999px;
+  background: rgba(21, 5, 15, 0.58);
+}
+
+.level-meter {
+  right: max(22px, env(safe-area-inset-right));
+  bottom: max(10px, env(safe-area-inset-bottom));
+  left: max(22px, env(safe-area-inset-left));
+  height: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(102, 242, 255, 0.3);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(102, 242, 255, 0.1), rgba(255, 215, 110, 0.08)),
+    rgba(18, 5, 15, 0.64);
+  box-shadow:
+    0 10px 24px rgba(10, 0, 8, 0.3),
+    inset 0 0 0 1px rgba(255, 215, 110, 0.08);
+  filter: none;
+}
+
+.level-meter__fill {
+  top: 3px;
+  right: 3px;
+  bottom: 3px;
+  left: 3px;
+  height: auto;
+}
+
+@media (max-width: 640px) {
+  .hud {
+    grid-template-columns: 96px minmax(120px, 1fr) auto;
+    gap: 6px;
+    inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) auto
+      max(8px, env(safe-area-inset-left));
+  }
+
+  .hud__stat--score,
+  .hud__stat--level,
+  .pause-button {
+    height: 42px;
+  }
+
+  .hud__stat--score {
+    padding-left: 40px;
+  }
+
+  .hud__stat--level {
+    width: 58px;
+    padding: 6px 8px;
+  }
+
+  .hud__stat--level::before {
+    display: none;
+  }
+
+  .hud__stat strong,
+  .hud__stat--score strong,
+  .hud__stat--level strong {
+    font-size: 15px;
+  }
+
+  .hud__label,
+  .mission-panel__label,
+  .health::before {
+    font-size: 8px;
+  }
+
+  .hud__controls {
+    grid-template-columns: 42px 58px;
+    gap: 5px;
+  }
+
+  .pause-button {
+    width: 42px;
+    min-width: 42px;
+  }
+
+  .pause-button__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .health {
+    width: min(220px, 100%);
+    height: 42px;
+  }
+
+  .health__bar {
+    top: 22px;
+    bottom: 8px;
+  }
+
+  .mission-panel {
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 28px);
+    width: min(320px, calc(100vw - 18px));
+    padding: 10px 12px 11px;
+  }
+
+  .level-meter {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(5px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    height: 12px;
+  }
+}
+
+/* Active HUD layer: generated transparent ornaments plus compact readable panels. */
+.hud {
+  inset: max(12px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) auto
+    max(14px, env(safe-area-inset-left));
+  grid-template-columns: 146px minmax(245px, 360px) auto;
+  gap: 10px;
+}
+
+.hud__stat,
+.health,
+.mission-panel,
+.level-meter {
+  overflow: visible;
+  isolation: isolate;
+}
+
+.hud__stat {
+  min-height: 50px;
+  padding: 8px 12px 8px 58px;
+  border: 1px solid rgba(102, 242, 255, 0.42);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(8, 45, 54, 0.78), rgba(48, 9, 26, 0.78)),
+    rgba(20, 5, 15, 0.58);
+}
+
+.hud__stat::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  bottom: auto;
+  left: -8px;
+  display: block;
+  width: 62px;
+  height: 62px;
+  border: 0;
+  border-radius: 0;
+  background: url("./assets/ui/hud-orn-score.png") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.hud__stat::after,
+.health::after,
+.mission-panel::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  display: block;
+  width: 58px;
+  height: 58px;
+  background: url("./assets/ui/hud-orn-red-corner.png") center / contain no-repeat;
+  opacity: 0.78;
+  pointer-events: none;
+}
+
+.hud__stat--score {
+  width: 146px;
+}
+
+.hud__stat--score .hud__label,
+.hud__stat--level .hud__label,
+.mission-panel__label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+}
+
+.hud__stat strong,
+.hud__stat--score strong,
+.hud__stat--level strong {
+  position: static;
+  display: block;
+  color: #fff7d3;
+  font-size: 18px;
+  line-height: 1;
+  text-align: left;
+}
+
+.hud__stat--level {
+  width: 70px;
+  min-height: 56px;
+  padding: 8px 5px 7px;
+  border: 0;
+  background: url("./assets/ui/hud-orn-level.png") center / contain no-repeat;
+  box-shadow: none;
+}
+
+.hud__stat--level::before,
+.hud__stat--level::after {
+  display: none;
+}
+
+.hud__stat--level strong,
+.hud__stat--level .hud__label {
+  text-align: center;
+}
+
+.health {
+  width: min(360px, 100%);
+  height: 50px;
+  border-color: rgba(102, 242, 255, 0.44);
+  background:
+    linear-gradient(90deg, rgba(8, 49, 57, 0.84), rgba(48, 9, 26, 0.76)),
+    rgba(18, 5, 15, 0.58);
+}
+
+.health::after {
+  top: -8px;
+  right: auto;
+  bottom: auto;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  background-image: url("./assets/ui/hud-orn-health.png");
+  opacity: 1;
+}
+
+.health::before {
+  left: 62px;
+}
+
+.health__bar {
+  top: 25px;
+  right: 12px;
+  bottom: 9px;
+  left: 62px;
+}
+
+.mission-panel {
+  top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+  width: min(330px, calc(100vw - 32px));
+  padding: 12px 12px 12px 62px;
+  border-color: rgba(102, 242, 255, 0.36);
+  background:
+    linear-gradient(135deg, rgba(42, 8, 25, 0.88), rgba(16, 45, 52, 0.62)),
+    rgba(18, 5, 15, 0.62);
+}
+
+.mission-panel::before {
+  content: "";
+  position: absolute;
+  top: -7px;
+  left: -8px;
+  width: 62px;
+  height: 62px;
+  background: url("./assets/ui/hud-orn-mission.png") center / contain no-repeat;
+  pointer-events: none;
+}
+
+.mission-panel::after {
+  width: 50px;
+  height: 50px;
+}
+
+.mission-panel strong {
+  font-size: 14px;
+  line-height: 1.05;
+}
+
+.mission-panel p {
+  display: -webkit-box;
+  max-width: 250px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.mission-panel__meta {
+  gap: 4px;
+}
+
+.mission-panel__meta span,
+#abilityDash,
+#abilityPulse {
+  width: auto;
+  min-height: 20px;
+  padding: 3px 7px;
+  font-size: 9px;
+}
+
+.mission-panel__meta::after {
+  content: "";
+  flex-basis: 100%;
+  height: 9px;
+  margin-top: -1px;
+  background: url("./assets/ui/hud-orn-gold-divider.png") left center / 150px auto no-repeat;
+  opacity: 0.72;
+}
+
+.level-meter {
+  height: 17px;
+  overflow: hidden;
+  border-color: rgba(102, 242, 255, 0.36);
+}
+
+.level-meter::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(340px, 50vw);
+  height: 34px;
+  background: url("./assets/ui/hud-orn-cyan-divider.png") center / contain no-repeat;
+  opacity: 0.76;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.level-meter__fill {
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .hud {
+    grid-template-columns: 102px minmax(116px, 1fr) auto;
+    gap: 6px;
+  }
+
+  .hud__stat {
+    min-height: 42px;
+    padding: 6px 8px 6px 42px;
+  }
+
+  .hud__stat::before,
+  .health::after,
+  .mission-panel::before {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hud__stat--score {
+    width: 102px;
+  }
+
+  .hud__stat--level {
+    width: 54px;
+    min-height: 46px;
+    padding: 6px 4px;
+  }
+
+  .health {
+    width: min(210px, 100%);
+    height: 42px;
+  }
+
+  .health::before {
+    left: 48px;
+  }
+
+  .health__bar {
+    right: 9px;
+    bottom: 8px;
+    left: 48px;
+  }
+
+  .mission-panel {
+    width: min(300px, calc(100vw - 18px));
+    padding: 10px 10px 10px 48px;
+  }
+
+  .mission-panel p {
+    max-width: none;
+  }
+}
+
+/* Final health fill override for the applied generated HUD. */
+.health::before {
+  content: "Health";
+  position: absolute;
+  top: 8px;
+  left: 62px;
+  color: #66f2ff;
+  font-size: 9px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(102, 242, 255, 0.34);
+}
+
+.health__bar {
+  position: absolute;
+  z-index: 1;
+  display: block;
+  top: 25px;
+  right: 12px;
+  bottom: 9px;
+  left: 62px;
+  width: auto;
+  max-width: none;
+  min-height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #56efff, #b5ffe9 52%, var(--hud-gold));
+  box-shadow:
+    0 0 18px rgba(102, 242, 255, 0.42),
+    inset 0 0 10px rgba(255, 255, 255, 0.16);
+  transform-origin: left center;
+  transition: transform 160ms ease;
+}
+
+.health__bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0));
+  opacity: 0.62;
+}
+
+@media (max-width: 640px) {
+  .health::before {
+    left: 48px;
+  }
+
+  .health__bar {
+    right: 9px;
+    bottom: 8px;
+    left: 48px;
+    min-height: 10px;
+  }
+}
+/* Final corner cleanup: use the generated ornament as a real corner, not an end cap. */
+.hud__stat::after {
+  content: none;
+  display: none;
+}
+
+.hud__stat--score::after,
+.mission-panel::after {
+  content: "";
+  position: absolute;
+  display: block;
+  width: 40px;
+  height: 43px;
+  background: url("./assets/ui/hud-orn-cyan-corner.png") center / contain no-repeat;
+  opacity: 0.56;
+  pointer-events: none;
+}
+
+.hud__stat--score::after {
+  top: -4px;
+  right: -4px;
+  bottom: auto;
+  left: auto;
+  transform: scaleX(-1);
+}
+
+.hud__stat--level::after {
+  content: none;
+  display: none;
+}
+
+.mission-panel::after {
+  top: auto;
+  right: -5px;
+  bottom: -5px;
+  left: auto;
+  width: 42px;
+  height: 45px;
+  transform: rotate(180deg);
+}
+
+@media (max-width: 640px) {
+  .hud__stat--score::after,
+  .mission-panel::after {
+    width: 32px;
+    height: 35px;
   }
 }

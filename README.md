@@ -12,7 +12,13 @@ Play the current build at [humble-marvel-dx2j.here.now](https://humble-marvel-dx
 
 ![Bloodstream Defender title screen](docs/screenshots/title-screen.png)
 
-![Bloodstream Defender gameplay](docs/screenshots/gameplay.png)
+![Bloodstream Defender HUD and mission panel](docs/screenshots/gameplay-hud.png)
+
+![Bloodstream Defender firing a Y-shaped antibody projectile](docs/screenshots/antibody-shot.png)
+
+![Bloodstream Defender influenza enemy in the Influenza Bloom mission](docs/screenshots/influenza-enemy.png)
+
+![Bloodstream Defender upgrade tree](docs/screenshots/upgrade-tree.png)
 
 ![Bloodstream Defender pause menu](docs/screenshots/pause-menu.png)
 
@@ -63,7 +69,8 @@ The player then chooses one adaptation from a roguelite upgrade tree:
 - Budding virions that can split into smaller fragments when neutralized
 - Generated white blood cell, virus, platelet, red blood cell, and antibody sprites
 - Multi-layer generated blood-vessel backgrounds with parallax scrolling
-- Pause menu, mission panel, health bar, score, level display, ability status chips, and level progress bar
+- Generated HUD ornament art for the mission panel, health bar, score, level display, pause button, ability status chips, and level progress bar
+- Pause menu, level-complete screen, and ImageGen-guided upgrade tree
 - Procedural sound effects for shooting, movement surges, and virus pops
 
 ## Project Structure
