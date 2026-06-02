@@ -33,6 +33,19 @@
         </div>
       </section>
 
+      <section class="mission-panel" aria-live="polite">
+        <div>
+          <span class="mission-panel__label">Mission</span>
+          <strong id="missionName">Innate Patrol</strong>
+        </div>
+        <p id="objectiveText">Neutralize viral antigens before they spread.</p>
+        <div class="mission-panel__meta">
+          <span id="virusesLeft">5 virions left</span>
+          <span id="abilityDash">Dash locked</span>
+          <span id="abilityPulse">Pulse locked</span>
+        </div>
+      </section>
+
       <section class="level-meter" aria-label="Level progress">
         <span id="levelProgress" class="level-meter__fill"></span>
       </section>
@@ -41,6 +54,7 @@
 
       <section id="startOverlay" class="overlay">
         <h1>Bloodstream Defender</h1>
+        <p id="runSummary" class="run-summary" hidden></p>
         <button id="startButton" class="primary-action" type="button">Start Run</button>
       </section>
 
@@ -50,6 +64,43 @@
           <div class="pause-menu">
             <button id="resumeButton" class="menu-action menu-action--primary" type="button">Resume</button>
             <button id="restartButton" class="menu-action menu-action--secondary" type="button">Restart Run</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="levelCompleteOverlay" class="overlay level-complete-overlay" role="dialog" aria-modal="true" aria-labelledby="levelCompleteTitle" hidden>
+        <div class="level-complete-panel">
+          <span class="overlay-eyebrow">Vessel Section Cleared</span>
+          <h1 id="levelCompleteTitle">Mission Complete</h1>
+          <p id="levelCompleteMission">Innate Patrol: Innate immunity</p>
+          <div class="level-complete-stats" aria-label="Level results">
+            <span id="levelCompleteScore">Score 0</span>
+            <span id="levelCompleteKills">0 virions neutralized</span>
+            <span id="levelCompleteHealth">Health 100%</span>
+          </div>
+          <p id="nextMissionPreview">Next section: Antigen Sweep</p>
+          <button id="showUpgradeButton" class="primary-action" type="button">Choose Adaptation</button>
+        </div>
+      </section>
+
+      <section id="upgradeOverlay" class="overlay upgrade-overlay" role="dialog" aria-modal="true" aria-labelledby="upgradeTitle" hidden>
+        <div class="upgrade-panel">
+          <span class="overlay-eyebrow">Adaptive Response</span>
+          <h1 id="upgradeTitle">Choose an Upgrade Path</h1>
+          <p id="upgradeIntro">Your leukocyte learned from this section. Pick one branch of the immune response for the next vessel.</p>
+          <div class="upgrade-tree" aria-label="Antibody upgrade tree">
+            <div class="upgrade-branch">
+              <span class="upgrade-branch__root">Antibody Output</span>
+              <button class="upgrade-node" type="button" data-upgrade="rapid"></button>
+            </div>
+            <div class="upgrade-branch">
+              <span class="upgrade-branch__root">Complement Defense</span>
+              <button class="upgrade-node" type="button" data-upgrade="pulse"></button>
+            </div>
+            <div class="upgrade-branch">
+              <span class="upgrade-branch__root">Cell Movement</span>
+              <button class="upgrade-node" type="button" data-upgrade="dash"></button>
+            </div>
           </div>
         </div>
       </section>

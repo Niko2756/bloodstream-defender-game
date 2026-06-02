@@ -3,7 +3,9 @@ const ctx = canvas.getContext("2d");
 const scoreEl = document.querySelector("#score");
 const levelEl = document.querySelector("#level");
 const healthBar = document.querySelector("#healthBar");
+const hudEl = document.querySelector(".hud");
 const levelProgressEl = document.querySelector("#levelProgress");
+const levelMeterEl = document.querySelector(".level-meter");
 const levelBannerEl = document.querySelector("#levelBanner");
 const overlay = document.querySelector("#startOverlay");
 const startButton = document.querySelector("#startButton");
@@ -12,6 +14,24 @@ const pauseButtonText = document.querySelector("#pauseButtonText");
 const pauseOverlay = document.querySelector("#pauseOverlay");
 const resumeButton = document.querySelector("#resumeButton");
 const restartButton = document.querySelector("#restartButton");
+const levelCompleteOverlay = document.querySelector("#levelCompleteOverlay");
+const levelCompleteTitleEl = document.querySelector("#levelCompleteTitle");
+const levelCompleteMissionEl = document.querySelector("#levelCompleteMission");
+const levelCompleteScoreEl = document.querySelector("#levelCompleteScore");
+const levelCompleteKillsEl = document.querySelector("#levelCompleteKills");
+const levelCompleteHealthEl = document.querySelector("#levelCompleteHealth");
+const nextMissionPreviewEl = document.querySelector("#nextMissionPreview");
+const showUpgradeButton = document.querySelector("#showUpgradeButton");
+const missionPanelEl = document.querySelector(".mission-panel");
+const missionNameEl = document.querySelector("#missionName");
+const objectiveTextEl = document.querySelector("#objectiveText");
+const virusesLeftEl = document.querySelector("#virusesLeft");
+const abilityDashEl = document.querySelector("#abilityDash");
+const abilityPulseEl = document.querySelector("#abilityPulse");
+const runSummaryEl = document.querySelector("#runSummary");
+const upgradeOverlay = document.querySelector("#upgradeOverlay");
+const upgradeIntroEl = document.querySelector("#upgradeIntro");
+const upgradeCards = Array.from(document.querySelectorAll(".upgrade-node"));
 
 const TAU = Math.PI * 2;
 const keys = new Set();
@@ -40,8 +60,11 @@ const state = {
   levelLength: 3200,
   levelKills: 0,
   levelGoal: 5,
+  currentMission: null,
   levelBannerTimer: 0,
   levelTransitionTimer: 0,
+  levelComplete: false,
+  awaitingUpgrade: false,
   time: 0,
   lastTime: performance.now(),
   scroll: 0,
@@ -57,6 +80,21 @@ const state = {
   plasma: [],
   lockTarget: null,
   lastUiStart: 0,
+  upgrades: {
+    rapid: 0,
+    pulse: 0,
+    dash: 0,
+  },
+  stats: {
+    virionsNeutralized: 0,
+    sectionsCleared: 0,
+    upgradesTaken: [],
+  },
+  dashCooldown: 0,
+  dashTimer: 0,
+  pulseCooldown: 0,
+  pulseTimer: 0,
+  shake: 0,
 };
 
 const palette = {
@@ -72,6 +110,90 @@ const palette = {
   cyanDeep: "#11aeca",
   platelet: "#ffcd58",
 };
+
+const missionDeck = [
+  {
+    name: "Innate Patrol",
+    term: "Innate immunity",
+    objective: "Neutralize free virions before they spread downstream.",
+    target: "virions",
+  },
+  {
+    name: "Antigen Sweep",
+    term: "Antigen",
+    objective: "Tag viral antigens so the immune response can recognize them.",
+    target: "antigens",
+  },
+  {
+    name: "Complement Cascade",
+    term: "Complement system",
+    objective: "Clear the viral cluster while avoiding platelet clots.",
+    target: "virions",
+  },
+  {
+    name: "Chemotaxis Run",
+    term: "Chemotaxis",
+    objective: "Follow the chemical trail and intercept fast-moving pathogens.",
+    target: "pathogens",
+  },
+  {
+    name: "Phagocyte Cleanup",
+    term: "Phagocytosis",
+    objective: "Engulf weakened invaders and keep oxygen flow open.",
+    target: "invaders",
+  },
+  {
+    name: "Memory Response",
+    term: "Adaptive immunity",
+    objective: "Use learned antibody patterns to stop the next wave faster.",
+    target: "virions",
+  },
+];
+
+const upgradeOptions = [
+  {
+    id: "rapid",
+    term: "IgG antibodies",
+    title: "Rapid Antibody Factory",
+    use: "Use: Space, click, or tap to fire. This branch is always active.",
+    body:
+      "Shortens the antibody cooldown. At higher ranks, your leukocyte releases paired Y-shaped antibodies.",
+    levels: [
+      "Rank 1: faster antibody firing",
+      "Rank 2: paired antibodies",
+      "Rank 3: stronger antibody hits",
+      "Rank 4: triple antibody spread",
+    ],
+  },
+  {
+    id: "pulse",
+    term: "Complement proteins",
+    title: "Complement Pulse",
+    use: "Use: press E or Q after unlocking.",
+    body:
+      "Unlocks a radial pulse that damages nearby viruses and breaks platelet hazards before they reach you.",
+    levels: [
+      "Rank 1: unlock pulse",
+      "Rank 2: larger damage ring",
+      "Rank 3: shorter cooldown",
+      "Rank 4: heavy nearby clear",
+    ],
+  },
+  {
+    id: "dash",
+    term: "Chemotaxis",
+    title: "Chemotaxis Dash",
+    use: "Use: press Shift with WASD or arrows to surge.",
+    body:
+      "Unlocks a quick immune-cell surge for slipping through crowded vessel sections and lining up shots.",
+    levels: [
+      "Rank 1: unlock dash",
+      "Rank 2: stronger surge",
+      "Rank 3: faster recovery",
+      "Rank 4: longer invulnerable slip",
+    ],
+  },
+];
 
 const parallaxLayers = {
   far: loadGameImage("./assets/backgrounds/parallax/source/layer-00-far-vessel-wash.png"),
@@ -259,6 +381,16 @@ function playVirusPopSfx() {
   playTone({ type: "sawtooth", start: 180, end: 58, duration: 0.18, gain: 0.12 });
 }
 
+function playUpgradeSfx() {
+  playTone({ type: "triangle", start: 360, end: 920, duration: 0.2, gain: 0.11 });
+  playTone({ type: "sine", start: 680, end: 1320, duration: 0.16, gain: 0.07 });
+}
+
+function playPulseSfx() {
+  playNoise({ duration: 0.28, gain: 0.16, frequency: 420 });
+  playTone({ type: "sine", start: 240, end: 760, duration: 0.22, gain: 0.12 });
+}
+
 function drawAtlasFrame(frame, x, y, targetHeight, options = {}) {
   if (!spriteAtlas.loaded || !frame) return false;
 
@@ -364,11 +496,17 @@ function clampToVessel(x, y, radius) {
   return clamp(y, top, bottom);
 }
 
+function getMission(level) {
+  return missionDeck[(level - 1) % missionDeck.length];
+}
+
 function getLevelConfig(level) {
+  const mission = getMission(level);
   return {
     length: 2200 + level * 520,
     kills: 3 + level * 2,
     spawnScale: Math.max(0.58, 1 - level * 0.055),
+    mission,
   };
 }
 
@@ -396,6 +534,7 @@ function showLevelBanner(text, duration = 2.1) {
 function configureLevel(level) {
   const config = getLevelConfig(level);
   state.level = level;
+  state.currentMission = config.mission;
   state.levelStartScroll = state.scroll;
   state.levelLength = config.length;
   state.levelGoal = config.kills;
@@ -403,12 +542,132 @@ function configureLevel(level) {
   state.levelTransitionTimer = 0;
   state.nextVirus = 1.05;
   state.nextPlatelet = 4.4;
-  showLevelBanner(`Level ${level} - Clear ${config.kills} Viruses`, 2.2);
+  showLevelBanner(`${config.mission.name}: ${config.mission.term}`, 2.35);
+}
+
+function getUpgradeById(id) {
+  return upgradeOptions.find((upgrade) => upgrade.id === id);
+}
+
+function getUpgradeRankLabel(id) {
+  const rank = state.upgrades[id] || 0;
+  return rank === 0 ? "New adaptation" : `Current rank ${rank}`;
+}
+
+function isUpgradeMaxed(upgrade) {
+  return (state.upgrades[upgrade.id] || 0) >= upgrade.levels.length;
+}
+
+function getUpgradeNextText(upgrade) {
+  const rank = state.upgrades[upgrade.id] || 0;
+  if (rank >= upgrade.levels.length) return "Fully adapted";
+  return upgrade.levels[rank];
+}
+
+function renderUpgradePips(upgrade) {
+  const rank = state.upgrades[upgrade.id] || 0;
+  return upgrade.levels
+    .map(
+      (_, index) =>
+        `<span class="upgrade-node__pip${index < rank ? " is-filled" : ""}"></span>`,
+    )
+    .join("");
+}
+
+function renderUpgradeCards() {
+  for (const card of upgradeCards) {
+    const upgrade = getUpgradeById(card.dataset.upgrade);
+    if (!upgrade) continue;
+    const maxed = isUpgradeMaxed(upgrade);
+
+    card.innerHTML = `
+      <span class="upgrade-node__term">${upgrade.term}</span>
+      <span class="upgrade-node__title">${upgrade.title}</span>
+      <span class="upgrade-node__use">${upgrade.use}</span>
+      <span class="upgrade-node__body">${upgrade.body}</span>
+      <span class="upgrade-node__next">${getUpgradeNextText(upgrade)}</span>
+      <span class="upgrade-node__rank">${getUpgradeRankLabel(upgrade.id)}</span>
+      <span class="upgrade-node__pips" aria-hidden="true">${renderUpgradePips(upgrade)}</span>
+    `;
+    card.disabled = maxed;
+    card.classList.toggle("is-maxed", maxed);
+  }
+}
+
+function openLevelCompleteScreen() {
+  state.levelComplete = true;
+  state.levelTransitionTimer = 0;
+  pointer.down = false;
+  keys.clear();
+  state.viruses = [];
+  state.platelets = [];
+  state.shots = [];
+  state.lockTarget = null;
+
+  const mission = state.currentMission || getMission(state.level);
+  const nextMission = getMission(state.level + 1);
+  const health = state.player ? Math.round(state.player.health) : 0;
+  levelCompleteTitleEl.textContent = `Level ${state.level} Complete`;
+  levelCompleteMissionEl.textContent = `${mission.name}: ${mission.term}`;
+  levelCompleteScoreEl.textContent = `Score ${state.score}`;
+  levelCompleteKillsEl.textContent = `${state.levelKills} ${mission.target} neutralized`;
+  levelCompleteHealthEl.textContent = `Health ${health}%`;
+  nextMissionPreviewEl.textContent = `Next section: ${nextMission.name} (${nextMission.term})`;
+  levelCompleteOverlay.hidden = false;
+  upgradeOverlay.hidden = true;
+  syncPauseUi();
+  showUpgradeButton.focus();
+}
+
+function openUpgradeMenu() {
+  state.awaitingUpgrade = true;
+  state.levelComplete = false;
+  state.levelTransitionTimer = 0;
+  pointer.down = false;
+  keys.clear();
+  state.viruses = [];
+  state.platelets = [];
+  state.shots = [];
+  state.lockTarget = null;
+  const nextMission = getMission(state.level + 1);
+  upgradeIntroEl.textContent = `Section ${state.level} cleared. Prepare for ${nextMission.name}: ${nextMission.term}.`;
+  renderUpgradeCards();
+  levelCompleteOverlay.hidden = true;
+  upgradeOverlay.hidden = false;
+  syncPauseUi();
+  (upgradeCards.find((card) => !card.disabled) || upgradeCards[0])?.focus();
+}
+
+function showUpgradeTree() {
+  if (!state.levelComplete) return;
+  state.levelComplete = false;
+  levelCompleteOverlay.hidden = true;
+  openUpgradeMenu();
+}
+
+function chooseUpgrade(id) {
+  const upgrade = getUpgradeById(id);
+  if (!upgrade || !state.awaitingUpgrade) return;
+  if (isUpgradeMaxed(upgrade)) return;
+
+  state.upgrades[id] += 1;
+  state.stats.upgradesTaken.push(`${upgrade.title} rank ${state.upgrades[id]}`);
+  state.awaitingUpgrade = false;
+  upgradeOverlay.hidden = true;
+  playUpgradeSfx();
+  startNextLevel();
 }
 
 function syncPauseUi() {
+  const showGameplayUi =
+    state.running && !state.ended && !state.awaitingUpgrade && !state.levelComplete;
+  hudEl.hidden = !showGameplayUi;
+  missionPanelEl.hidden = !showGameplayUi;
+  levelMeterEl.hidden = !showGameplayUi;
+  levelBannerEl.hidden = !showGameplayUi;
   pauseOverlay.hidden = !state.paused;
-  pauseButton.hidden = !state.running || state.ended;
+  pauseButton.hidden =
+    !state.running || state.ended || state.awaitingUpgrade || state.levelComplete;
   pauseButton.classList.toggle("is-active", state.paused);
   pauseButton.setAttribute("aria-pressed", String(state.paused));
   pauseButton.setAttribute("aria-label", state.paused ? "Resume" : "Pause");
@@ -416,7 +675,7 @@ function syncPauseUi() {
 }
 
 function setPaused(paused) {
-  if (!state.running || state.ended) return;
+  if (!state.running || state.ended || state.awaitingUpgrade || state.levelComplete) return;
 
   state.paused = paused;
   if (paused) {
@@ -441,10 +700,13 @@ function resetGame() {
   state.running = true;
   state.ended = false;
   state.paused = false;
+  state.awaitingUpgrade = false;
+  state.levelComplete = false;
   state.score = 0;
   state.level = 1;
   state.levelStartScroll = 0;
   state.levelKills = 0;
+  state.currentMission = getMission(1);
   state.levelTransitionTimer = 0;
   state.time = 0;
   state.scroll = 0;
@@ -474,10 +736,29 @@ function resetGame() {
   state.platelets = [];
   state.particles = [];
   state.lockTarget = null;
+  state.upgrades = {
+    rapid: 0,
+    pulse: 0,
+    dash: 0,
+  };
+  state.stats = {
+    virionsNeutralized: 0,
+    sectionsCleared: 0,
+    upgradesTaken: [],
+  };
+  state.dashCooldown = 0;
+  state.dashTimer = 0;
+  state.pulseCooldown = 0;
+  state.pulseTimer = 0;
+  state.shake = 0;
   overlay.querySelector("h1").textContent = "Bloodstream Defender";
+  runSummaryEl.hidden = true;
+  runSummaryEl.textContent = "";
   startButton.textContent = "Start Run";
   configureLevel(1);
   overlay.hidden = true;
+  levelCompleteOverlay.hidden = true;
+  upgradeOverlay.hidden = true;
   syncPauseUi();
   updateHud();
 }
@@ -486,8 +767,30 @@ function updateHud() {
   scoreEl.textContent = String(state.score);
   levelEl.textContent = String(state.level);
   const health = state.player ? state.player.health : 100;
+  const mission = state.currentMission || getMission(state.level);
+  const virusesLeft = Math.max(0, state.levelGoal - state.levelKills);
   healthBar.style.transform = `scaleX(${clamp(health / 100, 0, 1)})`;
   levelProgressEl.style.transform = `scaleX(${getLevelProgress().combined})`;
+  missionNameEl.textContent = mission.name;
+  objectiveTextEl.textContent = mission.objective;
+  virusesLeftEl.textContent = `${virusesLeft} ${mission.target} left`;
+
+  const dashUnlocked = state.upgrades.dash > 0;
+  const pulseUnlocked = state.upgrades.pulse > 0;
+  abilityDashEl.textContent = dashUnlocked
+    ? state.dashCooldown <= 0
+      ? "Dash ready"
+      : `Dash ${Math.ceil(state.dashCooldown)}s`
+    : "Dash locked";
+  abilityPulseEl.textContent = pulseUnlocked
+    ? state.pulseCooldown <= 0
+      ? "Pulse ready"
+      : `Pulse ${Math.ceil(state.pulseCooldown)}s`
+    : "Pulse locked";
+  abilityDashEl.classList.toggle("is-ready", dashUnlocked && state.dashCooldown <= 0);
+  abilityPulseEl.classList.toggle("is-ready", pulseUnlocked && state.pulseCooldown <= 0);
+  abilityDashEl.classList.toggle("is-locked", !dashUnlocked);
+  abilityPulseEl.classList.toggle("is-locked", !pulseUnlocked);
 }
 
 function spawnRedCell(depth = rand(0.42, 1.12), x = state.width + rand(20, 180)) {
@@ -509,13 +812,16 @@ function spawnRedCell(depth = rand(0.42, 1.12), x = state.width + rand(20, 180))
 function spawnVirus() {
   const levelBoost = Math.min(8, state.level - 1);
   const roll = Math.random();
-  const type =
-    roll > 0.83 && state.level > 2
-      ? "tank"
-      : roll > 0.58
-        ? "fast"
-        : "basic";
-  const stats = {
+  let type = "basic";
+  if (roll > 0.88 && state.level > 3) {
+    type = "budding";
+  } else if (roll > 0.76 && state.level > 2) {
+    type = "tank";
+  } else if (roll > 0.52) {
+    type = "fast";
+  }
+
+  const statsByType = {
     basic: {
       radius: rand(18, 25),
       hp: 2,
@@ -543,10 +849,20 @@ function spawnVirus() {
       score: 70,
       spikes: 13,
     },
-  }[type];
+    budding: {
+      radius: rand(22, 29),
+      hp: 3,
+      speed: rand(74, 104) + levelBoost * 7,
+      color: "#ffd15d",
+      core: "#8d501f",
+      score: 55,
+      spikes: 11,
+    },
+  };
+  const stats = statsByType[type];
 
   const x = state.width + stats.radius + rand(15, 110);
-  const spriteGroup = type === "basic" ? "greenVirus" : "purpleVirus";
+  const spriteGroup = type === "basic" || type === "budding" ? "greenVirus" : "purpleVirus";
   state.viruses.push({
     ...stats,
     type,
@@ -559,6 +875,31 @@ function spawnVirus() {
     hit: 0,
     angle: rand(0, TAU),
     spin: rand(-1.4, 1.4),
+  });
+}
+
+function spawnVirusFragment(parent, direction) {
+  const levelBoost = Math.min(8, state.level - 1);
+  const radius = rand(10, 14);
+  const y = clampToVessel(parent.x, parent.y + direction * rand(24, 46), radius);
+  state.viruses.push({
+    type: "fragment",
+    spriteGroup: "purpleVirus",
+    frameIndex: randomFrameIndex("purpleVirus"),
+    x: parent.x + rand(10, 22),
+    y,
+    radius,
+    hp: 1,
+    speed: rand(150, 205) + levelBoost * 8,
+    color: "#ff9b45",
+    core: "#7d301d",
+    score: 15,
+    spikes: 6,
+    wobble: rand(0, TAU),
+    wobbleSpeed: rand(2.2, 3.3),
+    hit: 0,
+    angle: rand(0, TAU),
+    spin: rand(-2.4, 2.4),
   });
 }
 
@@ -597,7 +938,7 @@ function updateLevelTimers(dt) {
   if (state.levelTransitionTimer > 0) {
     state.levelTransitionTimer = Math.max(0, state.levelTransitionTimer - dt);
     if (state.levelTransitionTimer === 0) {
-      startNextLevel();
+      openLevelCompleteScreen();
     }
   }
 }
@@ -606,11 +947,12 @@ function completeLevel() {
   if (state.levelTransitionTimer > 0) return;
 
   state.levelTransitionTimer = 1.55;
+  state.stats.sectionsCleared += 1;
   state.viruses = [];
   state.platelets = [];
   state.shots = [];
   state.lockTarget = null;
-  showLevelBanner(`Section ${state.level} Cleared`, 1.45);
+  showLevelBanner(`${state.currentMission?.name || "Section"} Cleared`, 1.45);
 
   if (state.player) {
     addParticleBurst(state.player.x, state.player.y, palette.cyan, 26, 190);
@@ -640,6 +982,7 @@ function updateLevelCompletion() {
 function isLockableVirus(virus) {
   return (
     virus &&
+    !virus.dead &&
     virus.hp > 0 &&
     virus.x > -virus.radius - 24 &&
     virus.x < state.width + virus.radius + 120
@@ -721,6 +1064,39 @@ function getVisualAimPoint() {
   return { x: player.x + 220, y: player.y };
 }
 
+function rotateVector(x, y, angle) {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return {
+    x: x * cos - y * sin,
+    y: x * sin + y * cos,
+  };
+}
+
+function addAntibodyShot(player, aim, dx, dy, angleOffset = 0) {
+  const rapidRank = state.upgrades.rapid;
+  const shotDirection = rotateVector(dx, dy, angleOffset);
+  const muzzle = player.radius + 10;
+  const shotSpeed = 620 + rapidRank * 42;
+  const screenTravelLife = (Math.hypot(state.width, state.height) + 260) / shotSpeed;
+
+  state.shots.push({
+    x: player.x + shotDirection.x * muzzle,
+    y: player.y + shotDirection.y * muzzle,
+    vx: shotDirection.x * shotSpeed + player.vx * 0.18,
+    vy: shotDirection.y * shotSpeed + player.vy * 0.18,
+    radius: 4.2,
+    hitRadius: 6.8 + rapidRank * 0.4,
+    life: Math.max(2.1, screenTravelLife),
+    damage: rapidRank >= 3 ? 3 : 2,
+    target: aim.target,
+    age: 0,
+    frameIndex: randomFrameIndex("antibody"),
+  });
+
+  return shotDirection;
+}
+
 function fireShot() {
   const player = state.player;
   if (!state.running || !player || player.cooldown > 0) return;
@@ -734,26 +1110,22 @@ function fireShot() {
   dx /= length;
   dy /= length;
 
-  const muzzle = player.radius + 10;
-  const shotSpeed = 620;
-  const screenTravelLife = (Math.hypot(state.width, state.height) + 260) / shotSpeed;
-  state.shots.push({
-    x: player.x + dx * muzzle,
-    y: player.y + dy * muzzle,
-    vx: dx * shotSpeed + player.vx * 0.18,
-    vy: dy * shotSpeed + player.vy * 0.18,
-    radius: 4.2,
-    hitRadius: 6.8,
-    life: Math.max(2.1, screenTravelLife),
-    damage: 2,
-    target: aim.target,
-    age: 0,
-    frameIndex: randomFrameIndex("antibody"),
-  });
-  player.cooldown = 0.13;
+  const rapidRank = state.upgrades.rapid;
+  const spread = rapidRank >= 4 ? [-0.11, 0, 0.11] : rapidRank >= 2 ? [-0.075, 0.075] : [0];
+  let mainDirection = { x: dx, y: dy };
+  for (const angleOffset of spread) {
+    mainDirection = addAntibodyShot(player, aim, dx, dy, angleOffset);
+  }
+  player.cooldown = Math.max(0.055, 0.13 * Math.pow(0.78, rapidRank));
 
   playShootSfx();
-  addParticleBurst(player.x + dx * muzzle, player.y + dy * muzzle, palette.cyan, 5, 46);
+  addParticleBurst(
+    player.x + mainDirection.x * (player.radius + 10),
+    player.y + mainDirection.y * (player.radius + 10),
+    palette.cyan,
+    5 + rapidRank,
+    46,
+  );
 }
 
 function addParticleBurst(x, y, color, count = 12, power = 110) {
@@ -773,11 +1145,109 @@ function addParticleBurst(x, y, color, count = 12, power = 110) {
   }
 }
 
+function destroyVirus(virus, source = "shot") {
+  if (!virus || virus.dead) return;
+
+  virus.dead = true;
+  virus.hp = 0;
+  state.score += virus.score;
+  state.levelKills += 1;
+  state.stats.virionsNeutralized += 1;
+  state.shake = Math.max(state.shake, source === "pulse" ? 0.34 : 0.18);
+  playVirusPopSfx();
+  addParticleBurst(virus.x, virus.y, virus.color, virus.type === "tank" ? 26 : 18, 145);
+
+  if (virus.type === "budding") {
+    spawnVirusFragment(virus, -1);
+    spawnVirusFragment(virus, 1);
+    showLevelBanner("Budding virion split into fragments", 1.25);
+  }
+}
+
+function updateAbilities(dt) {
+  state.dashCooldown = Math.max(0, state.dashCooldown - dt);
+  state.dashTimer = Math.max(0, state.dashTimer - dt);
+  state.pulseCooldown = Math.max(0, state.pulseCooldown - dt);
+  state.pulseTimer = Math.max(0, state.pulseTimer - dt);
+  state.shake = Math.max(0, state.shake - dt * 2.8);
+}
+
+function triggerDash(horizontalInput, verticalInput) {
+  if (state.upgrades.dash <= 0 || state.dashCooldown > 0) return false;
+
+  const player = state.player;
+  let dx = horizontalInput;
+  let dy = verticalInput;
+  if (!dx && !dy) dx = 1;
+  const length = Math.hypot(dx, dy) || 1;
+  dx /= length;
+  dy /= length;
+
+  const dashRank = state.upgrades.dash;
+  const impulse = 430 + dashRank * 58;
+  player.vx += dx * impulse;
+  player.vy += dy * impulse;
+  player.invulnerable = Math.max(player.invulnerable, 0.34 + dashRank * 0.05);
+  state.dashTimer = 0.22;
+  state.dashCooldown = Math.max(1.4, 3.2 - dashRank * 0.42);
+  state.shake = Math.max(state.shake, 0.18);
+  playSwimSurgeSfx(dx >= 0 ? 1 : -1);
+  addParticleBurst(player.x - dx * player.radius, player.y - dy * player.radius, palette.cyan, 12, 155);
+  return true;
+}
+
+function triggerComplementPulse() {
+  if (state.upgrades.pulse <= 0 || state.pulseCooldown > 0) return false;
+
+  const player = state.player;
+  const pulseRank = state.upgrades.pulse;
+  const radius = 150 + pulseRank * 32;
+  const damage = 1 + pulseRank;
+  state.pulseTimer = 0.38;
+  state.pulseCooldown = Math.max(3.2, 7.2 - pulseRank * 0.9);
+  state.shake = Math.max(state.shake, 0.28);
+  player.invulnerable = Math.max(player.invulnerable, 0.72);
+  playPulseSfx();
+  addParticleBurst(player.x, player.y, "#d9ffff", 30, 210);
+
+  for (const virus of [...state.viruses]) {
+    if (virus.dead) continue;
+    const dist = distance(player, virus);
+    if (dist > radius + virus.radius) continue;
+    virus.hp -= damage;
+    virus.hit = 0.2;
+    if (virus.hp <= 0) destroyVirus(virus, "pulse");
+    else {
+      const push = (1 - clamp(dist / radius, 0, 1)) * 95;
+      const dx = (virus.x - player.x) / Math.max(1, dist);
+      const dy = (virus.y - player.y) / Math.max(1, dist);
+      virus.x += dx * push;
+      virus.y += dy * push;
+    }
+  }
+
+  for (const platelet of state.platelets) {
+    if (distance(player, platelet) < radius + platelet.radius) {
+      const burstX = platelet.x;
+      const burstY = platelet.y;
+      platelet.x = -999;
+      addParticleBurst(burstX, burstY, palette.platelet, 8, 80);
+    }
+  }
+
+  return true;
+}
+
 function update(dt) {
   if (!state.running) return;
 
   state.time += dt;
+  updateAbilities(dt);
   updateLevelTimers(dt);
+  if (state.awaitingUpgrade) {
+    updateHud();
+    return;
+  }
   const worldSpeed = 92 + state.level * 8 + (state.levelTransitionTimer > 0 ? 42 : 0);
   state.scroll += worldSpeed * dt;
 
@@ -799,17 +1269,29 @@ function updatePlayer(dt) {
   const player = state.player;
   const accel = 960;
   const swimKick = 44;
-  const maxSpeed = 350;
   let ax = 0;
   let ay = 0;
   const horizontalInput =
     (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0) -
     (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0);
+  const verticalInput =
+    (keys.has("ArrowDown") || keys.has("KeyS") ? 1 : 0) -
+    (keys.has("ArrowUp") || keys.has("KeyW") ? 1 : 0);
 
   if (horizontalInput < 0) ax -= accel;
   if (horizontalInput > 0) ax += accel;
-  if (keys.has("ArrowUp") || keys.has("KeyW")) ay -= accel;
-  if (keys.has("ArrowDown") || keys.has("KeyS")) ay += accel;
+  if (verticalInput < 0) ay -= accel;
+  if (verticalInput > 0) ay += accel;
+
+  if (keys.has("ShiftLeft") || keys.has("ShiftRight")) {
+    triggerDash(horizontalInput, verticalInput);
+  }
+
+  if (keys.has("KeyE") || keys.has("KeyQ")) {
+    triggerComplementPulse();
+  }
+
+  const maxSpeed = 350 + state.upgrades.dash * 18 + (state.dashTimer > 0 ? 320 : 0);
 
   if (ax || ay) {
     const length = Math.hypot(ax, ay);
@@ -908,6 +1390,7 @@ function updateShots(dt) {
 
 function updateViruses(dt, worldSpeed) {
   for (const virus of state.viruses) {
+    if (virus.dead) continue;
     virus.x -= (virus.speed + worldSpeed * 0.45) * dt;
     virus.y += Math.sin(state.time * virus.wobbleSpeed + virus.wobble) * 26 * dt;
     virus.y = clampToVessel(virus.x, virus.y, virus.radius);
@@ -915,7 +1398,9 @@ function updateViruses(dt, worldSpeed) {
     virus.hit = Math.max(0, virus.hit - dt);
   }
 
-  state.viruses = state.viruses.filter((virus) => virus.x > -virus.radius - 80 && virus.hp > 0);
+  state.viruses = state.viruses.filter(
+    (virus) => !virus.dead && virus.x > -virus.radius - 80 && virus.hp > 0,
+  );
 }
 
 function updateRedCells(dt, worldSpeed) {
@@ -954,16 +1439,14 @@ function checkCollisions() {
 
   for (const shot of state.shots) {
     for (const virus of state.viruses) {
+      if (virus.dead) continue;
       if (distance(shot, virus) < (shot.hitRadius ?? shot.radius) + virus.radius) {
         virus.hp -= shot.damage;
         virus.hit = 0.12;
         shot.life = -1;
         addParticleBurst(shot.x, shot.y, palette.cyan, 9, 95);
         if (virus.hp <= 0) {
-          state.score += virus.score;
-          state.levelKills += 1;
-          playVirusPopSfx();
-          addParticleBurst(virus.x, virus.y, virus.color, 18, 145);
+          destroyVirus(virus);
         }
         break;
       }
@@ -973,9 +1456,11 @@ function checkCollisions() {
   state.shots = state.shots.filter((shot) => shot.life > 0);
 
   for (const virus of state.viruses) {
+    if (virus.dead) continue;
     if (distance(player, virus) < player.radius * 0.82 + virus.radius * 0.66) {
       hurtPlayer(virus.type === "tank" ? 22 : 14, virus.x, virus.y, virus.color);
       virus.hp = 0;
+      virus.dead = true;
     }
   }
 
@@ -1020,14 +1505,29 @@ function endGame() {
   state.running = false;
   state.ended = true;
   state.paused = false;
+  state.awaitingUpgrade = false;
+  state.levelComplete = false;
   overlay.hidden = false;
   pauseOverlay.hidden = true;
-  overlay.querySelector("h1").textContent = "Run Complete";
+  levelCompleteOverlay.hidden = true;
+  upgradeOverlay.hidden = true;
+  overlay.querySelector("h1").textContent = "Immune Run Complete";
+  const upgradeList =
+    state.stats.upgradesTaken.length > 0
+      ? state.stats.upgradesTaken.join(", ")
+      : "No adaptations selected yet";
+  runSummaryEl.innerHTML = `Score ${state.score} | Sections cleared ${state.stats.sectionsCleared} | Virions neutralized ${state.stats.virionsNeutralized}<br>Adaptations: ${upgradeList}`;
+  runSummaryEl.hidden = false;
   startButton.textContent = "Try Again";
   syncPauseUi();
 }
 
 function draw() {
+  ctx.save();
+  if (state.shake > 0) {
+    const amount = state.shake * 7;
+    ctx.translate(rand(-amount, amount), rand(-amount, amount));
+  }
   drawBackground();
   drawWorldObjects(false);
   drawPlayer();
@@ -1035,6 +1535,7 @@ function draw() {
   drawShots();
   drawParticles();
   drawVesselForeground();
+  ctx.restore();
 }
 
 function drawBackground() {
@@ -1053,9 +1554,9 @@ function drawBackground() {
     drawProceduralPlasmaBands();
   }
 
-  drawParallaxLayer(parallaxLayers.currents, 0.28, 0.48);
-  drawParallaxLayer(parallaxLayers.branches, 0.38, 0.36);
-  drawParallaxLayer(parallaxLayers.cells, 0.52, 0.42);
+  drawParallaxLayer(parallaxLayers.currents, 0.28, 0.38);
+  drawParallaxLayer(parallaxLayers.branches, 0.38, 0.24);
+  drawParallaxLayer(parallaxLayers.cells, 0.52, 0.34);
   for (const dot of state.plasma) {
     dot.x -= dot.speed * (1 / 60) * (0.5 + dot.layer * 0.3);
     if (dot.x < -8) {
@@ -1067,6 +1568,20 @@ function drawBackground() {
     ctx.arc(dot.x, dot.y, dot.radius, 0, TAU);
     ctx.fill();
   }
+
+  drawGameplayFocusVeil();
+}
+
+function drawGameplayFocusVeil() {
+  const { width, height } = state;
+  const lane = ctx.createLinearGradient(0, 0, 0, height);
+  lane.addColorStop(0, "rgba(20, 2, 13, 0.08)");
+  lane.addColorStop(0.22, "rgba(28, 4, 16, 0.16)");
+  lane.addColorStop(0.5, "rgba(50, 8, 20, 0.1)");
+  lane.addColorStop(0.78, "rgba(28, 4, 16, 0.16)");
+  lane.addColorStop(1, "rgba(20, 2, 13, 0.1)");
+  ctx.fillStyle = lane;
+  ctx.fillRect(0, 0, width, height);
 }
 
 function drawProceduralPlasmaBands() {
@@ -1177,6 +1692,7 @@ function drawWorldObjects(foreground) {
   }
 
   for (const virus of state.viruses) {
+    if (virus.dead) continue;
     if (foreground) drawVirus(virus);
   }
 }
@@ -1190,7 +1706,7 @@ function drawVesselForeground() {
     drawWall("bottom");
   }
 
-  drawParallaxLayer(parallaxLayers.floaters, 1.22, 0.38);
+  drawParallaxLayer(parallaxLayers.floaters, 1.22, 0.28);
 
   const vignette = ctx.createRadialGradient(width * 0.48, height * 0.5, height * 0.15, width * 0.5, height * 0.5, width * 0.74);
   vignette.addColorStop(0, "rgba(0, 0, 0, 0)");
@@ -1343,18 +1859,58 @@ function drawPlatelet(platelet) {
   ctx.restore();
 }
 
+function drawVirusReadabilityHalo(virus) {
+  ctx.save();
+  ctx.translate(virus.x, virus.y);
+  const radius = virus.radius * (virus.type === "fragment" ? 1.28 : 1.34);
+  ctx.fillStyle = "rgba(14, 1, 10, 0.38)";
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, TAU);
+  ctx.fill();
+  ctx.lineWidth = virus.type === "budding" ? 3 : 2;
+  ctx.strokeStyle =
+    virus.type === "budding"
+      ? "rgba(255, 226, 126, 0.7)"
+      : virus.type === "fragment"
+        ? "rgba(255, 164, 90, 0.62)"
+        : "rgba(255, 244, 238, 0.22)";
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawVirusTypeOverlay(virus) {
+  if (virus.type !== "budding" && virus.type !== "fragment") return;
+
+  ctx.save();
+  ctx.translate(virus.x, virus.y);
+  ctx.rotate(-virus.angle * 0.45);
+  ctx.globalAlpha = virus.type === "fragment" ? 0.5 : 0.72;
+  ctx.strokeStyle = virus.type === "fragment" ? "rgba(255, 184, 108, 0.78)" : "rgba(255, 237, 136, 0.86)";
+  ctx.lineWidth = virus.type === "fragment" ? 1.8 : 2.4;
+  ctx.setLineDash(virus.type === "fragment" ? [4, 5] : [7, 5]);
+  ctx.beginPath();
+  ctx.arc(0, 0, virus.radius * 1.22, 0, TAU);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 function drawVirus(virus) {
   const frames = spriteFrames[virus.spriteGroup] || spriteFrames.greenVirus;
   const frame = frames[(virus.frameIndex ?? 0) % frames.length];
   const hitPulse = virus.hit > 0 ? 1 + Math.sin(state.time * 60) * 0.06 : 1;
+  drawVirusReadabilityHalo(virus);
   const spriteDrawn = drawAtlasFrame(frame, virus.x, virus.y, virus.radius * 2.92, {
     rotation: virus.angle,
     alpha: virus.hit > 0 ? 0.72 + Math.sin(state.time * 60) * 0.2 : 1,
     shadowColor: virus.color,
-    shadowBlur: virus.type === "tank" ? 18 : 11,
+    shadowBlur: virus.type === "tank" || virus.type === "budding" ? 18 : 11,
     pulse: hitPulse,
   });
-  if (spriteDrawn) return;
+  if (spriteDrawn) {
+    drawVirusTypeOverlay(virus);
+    return;
+  }
 
   ctx.save();
   ctx.translate(virus.x, virus.y);
@@ -1391,6 +1947,7 @@ function drawVirus(virus) {
   ctx.arc(-virus.radius * 0.25, -virus.radius * 0.32, virus.radius * 0.18, 0, TAU);
   ctx.fill();
   ctx.restore();
+  drawVirusTypeOverlay(virus);
 }
 
 function drawPlayerSwimWake(player, strength) {
@@ -1430,6 +1987,47 @@ function drawPlayerSwimWake(player, strength) {
   ctx.restore();
 }
 
+function drawPlayerAbilityEffects(player) {
+  if (state.pulseTimer > 0) {
+    const progress = 1 - state.pulseTimer / 0.38;
+    const radius = 72 + progress * (150 + state.upgrades.pulse * 32);
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.globalAlpha = 1 - progress;
+    ctx.strokeStyle = "rgba(194, 255, 255, 0.72)";
+    ctx.lineWidth = 5 - progress * 2.5;
+    ctx.shadowColor = palette.cyan;
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(0, 0, radius, 0, TAU);
+    ctx.stroke();
+    ctx.globalAlpha *= 0.36;
+    ctx.fillStyle = "rgba(102, 242, 255, 0.18)";
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 0.62, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (state.dashTimer > 0) {
+    const alpha = state.dashTimer / 0.22;
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.globalAlpha = alpha * 0.58;
+    ctx.strokeStyle = "rgba(210, 255, 250, 0.8)";
+    ctx.lineWidth = 3.4;
+    ctx.lineCap = "round";
+    for (let i = 0; i < 5; i += 1) {
+      const y = (i - 2) * player.radius * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(-player.radius * (1.1 + i * 0.08), y);
+      ctx.lineTo(-player.radius * (2.8 + i * 0.14), y * 0.6);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
 function drawPlayer() {
   const player = state.player;
   if (!player) return;
@@ -1446,6 +2044,7 @@ function drawPlayer() {
     player.vy * 0.0008 +
     (player.horizontalPose ?? 0) * 0.055;
 
+  drawPlayerAbilityEffects(player);
   drawPlayerSwimWake(player, poseStrength);
 
   const spriteDrawn = drawAtlasFrame(
@@ -1632,7 +2231,7 @@ function drawParticles() {
 function frame(now) {
   const dt = Math.min(0.033, (now - state.lastTime) / 1000 || 0);
   state.lastTime = now;
-  if (!state.paused) {
+  if (!state.paused && !state.awaitingUpgrade && !state.levelComplete) {
     update(dt);
   }
   draw();
@@ -1659,6 +2258,22 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (state.awaitingUpgrade) {
+    const target = event.target;
+    const isUpgradeControl =
+      target instanceof HTMLButtonElement && upgradeOverlay.contains(target);
+    if (!isUpgradeControl) event.preventDefault();
+    return;
+  }
+
+  if (state.levelComplete) {
+    const target = event.target;
+    const isCompleteControl =
+      target instanceof HTMLButtonElement && levelCompleteOverlay.contains(target);
+    if (!isCompleteControl) event.preventDefault();
+    return;
+  }
+
   if (state.paused) {
     const target = event.target;
     const isPauseControl =
@@ -1671,6 +2286,10 @@ window.addEventListener("keydown", (event) => {
   if (
     event.code.startsWith("Arrow") ||
     event.code === "Space" ||
+    event.code === "ShiftLeft" ||
+    event.code === "ShiftRight" ||
+    event.code === "KeyE" ||
+    event.code === "KeyQ" ||
     event.code === "KeyW" ||
     event.code === "KeyA" ||
     event.code === "KeyS" ||
@@ -1693,7 +2312,7 @@ canvas.addEventListener("pointermove", updatePointer);
 canvas.addEventListener("pointerdown", (event) => {
   ensureAudio();
   updatePointer(event);
-  if (state.paused) {
+  if (state.paused || state.awaitingUpgrade || state.levelComplete) {
     pointer.down = false;
     return;
   }
@@ -1730,11 +2349,20 @@ startButton.addEventListener("pointerdown", startRunFromUi);
 pauseButton.addEventListener("click", togglePaused);
 resumeButton.addEventListener("click", () => setPaused(false));
 restartButton.addEventListener("click", resetGame);
+showUpgradeButton.addEventListener("click", showUpgradeTree);
+for (const card of upgradeCards) {
+  card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
+}
 
 resize();
+renderUpgradeCards();
 resetGame();
 state.running = false;
 state.paused = false;
+state.awaitingUpgrade = false;
+state.levelComplete = false;
 overlay.hidden = false;
+levelCompleteOverlay.hidden = true;
+upgradeOverlay.hidden = true;
 syncPauseUi();
 requestAnimationFrame(frame);
