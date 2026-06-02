@@ -4,6 +4,10 @@ Bloodstream Defender is a small browser game about piloting a white blood cell t
 
 The idea started from a simple wish: I have always wanted to make a game about what is happening inside the body. The goal is to keep the science recognizable, with white blood cells, red blood cells, antibodies, platelets, viruses, and bloodstream motion, while still letting the whole thing feel cartoony, fast, and playful.
 
+## Live Demo
+
+Play the current build at [humble-marvel-dx2j.here.now](https://humble-marvel-dx2j.here.now/).
+
 ## Screenshots
 
 ![Bloodstream Defender title screen](docs/screenshots/title-screen.png)
