@@ -84,24 +84,28 @@
       </section>
 
       <section id="upgradeOverlay" class="overlay upgrade-overlay" role="dialog" aria-modal="true" aria-labelledby="upgradeTitle" hidden>
-        <div class="upgrade-panel">
-          <span class="overlay-eyebrow">Adaptive Response</span>
-          <h1 id="upgradeTitle">Choose an Upgrade Path</h1>
-          <p id="upgradeIntro">Your leukocyte learned from this section. Pick one branch of the immune response for the next vessel.</p>
+        <div class="upgrade-panel" tabindex="-1">
+          <div class="upgrade-plaque">
+            <span class="upgrade-plaque__emblem" aria-hidden="true"></span>
+            <span class="overlay-eyebrow">Adaptive Response</span>
+            <h1 id="upgradeTitle">Choose an Upgrade Path</h1>
+            <p id="upgradeIntro">Your leukocyte learned from this section. Pick one branch of the immune response for the next vessel.</p>
+          </div>
           <div class="upgrade-tree" aria-label="Antibody upgrade tree">
             <div class="upgrade-branch">
-              <span class="upgrade-branch__root">Antibody Output</span>
+              <span class="upgrade-branch__root"><span class="upgrade-branch__icon" aria-hidden="true"></span>Antibody Output</span>
               <button class="upgrade-node" type="button" data-upgrade="rapid"></button>
             </div>
             <div class="upgrade-branch">
-              <span class="upgrade-branch__root">Complement Defense</span>
+              <span class="upgrade-branch__root"><span class="upgrade-branch__icon" aria-hidden="true"></span>Complement Defense</span>
               <button class="upgrade-node" type="button" data-upgrade="pulse"></button>
             </div>
             <div class="upgrade-branch">
-              <span class="upgrade-branch__root">Cell Movement</span>
+              <span class="upgrade-branch__root"><span class="upgrade-branch__icon" aria-hidden="true"></span>Cell Movement</span>
               <button class="upgrade-node" type="button" data-upgrade="dash"></button>
             </div>
           </div>
+          <p class="upgrade-tip"><span aria-hidden="true">i</span>Choose one adaptation. Each branch stacks across the run.</p>
         </div>
       </section>
     </main>

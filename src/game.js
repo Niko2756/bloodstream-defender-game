@@ -30,6 +30,7 @@ const abilityDashEl = document.querySelector("#abilityDash");
 const abilityPulseEl = document.querySelector("#abilityPulse");
 const runSummaryEl = document.querySelector("#runSummary");
 const upgradeOverlay = document.querySelector("#upgradeOverlay");
+const upgradePanelEl = document.querySelector(".upgrade-panel");
 const upgradeIntroEl = document.querySelector("#upgradeIntro");
 const upgradeCards = Array.from(document.querySelectorAll(".upgrade-node"));
 
@@ -155,7 +156,11 @@ const upgradeOptions = [
     id: "rapid",
     term: "IgG antibodies",
     title: "Rapid Antibody Factory",
-    use: "Use: Space, click, or tap to fire. This branch is always active.",
+    icon: "Y",
+    medallion: "./assets/ui/upgrade-medallion-antibody.png",
+    controlIntro: "Use",
+    controls: ["Space", "Click", "Tap"],
+    controlOutro: "to fire",
     body:
       "Shortens the antibody cooldown. At higher ranks, your leukocyte releases paired Y-shaped antibodies.",
     levels: [
@@ -169,7 +174,11 @@ const upgradeOptions = [
     id: "pulse",
     term: "Complement proteins",
     title: "Complement Pulse",
-    use: "Use: press E or Q after unlocking.",
+    icon: "C",
+    medallion: "./assets/ui/upgrade-medallion-complement.png",
+    controlIntro: "Use",
+    controls: ["E", "Q"],
+    controlOutro: "after unlocking",
     body:
       "Unlocks a radial pulse that damages nearby viruses and breaks platelet hazards before they reach you.",
     levels: [
@@ -183,7 +192,11 @@ const upgradeOptions = [
     id: "dash",
     term: "Chemotaxis",
     title: "Chemotaxis Dash",
-    use: "Use: press Shift with WASD or arrows to surge.",
+    icon: "→",
+    medallion: "./assets/ui/upgrade-medallion-chemotaxis.png",
+    controlIntro: "Use",
+    controls: ["Shift", "WASD", "Arrows"],
+    controlOutro: "to surge",
     body:
       "Unlocks a quick immune-cell surge for slipping through crowded vessel sections and lining up shots.",
     levels: [
@@ -574,6 +587,12 @@ function renderUpgradePips(upgrade) {
     .join("");
 }
 
+function renderControlChips(upgrade) {
+  return upgrade.controls
+    .map((control) => `<span class="upgrade-node__key">${control}</span>`)
+    .join("");
+}
+
 function renderUpgradeCards() {
   for (const card of upgradeCards) {
     const upgrade = getUpgradeById(card.dataset.upgrade);
@@ -581,10 +600,19 @@ function renderUpgradeCards() {
     const maxed = isUpgradeMaxed(upgrade);
 
     card.innerHTML = `
+      <span class="upgrade-node__medallion" aria-hidden="true">
+        <img src="${upgrade.medallion}" alt="">
+      </span>
       <span class="upgrade-node__term">${upgrade.term}</span>
       <span class="upgrade-node__title">${upgrade.title}</span>
-      <span class="upgrade-node__use">${upgrade.use}</span>
+      <span class="upgrade-node__use">
+        <span>${upgrade.controlIntro}</span>
+        <span class="upgrade-node__keys">${renderControlChips(upgrade)}</span>
+        <span>${upgrade.controlOutro}</span>
+      </span>
       <span class="upgrade-node__body">${upgrade.body}</span>
+      <span class="upgrade-node__divider" aria-hidden="true"></span>
+      <span class="upgrade-node__next-label">Next Rank</span>
       <span class="upgrade-node__next">${getUpgradeNextText(upgrade)}</span>
       <span class="upgrade-node__rank">${getUpgradeRankLabel(upgrade.id)}</span>
       <span class="upgrade-node__pips" aria-hidden="true">${renderUpgradePips(upgrade)}</span>
@@ -635,7 +663,7 @@ function openUpgradeMenu() {
   levelCompleteOverlay.hidden = true;
   upgradeOverlay.hidden = false;
   syncPauseUi();
-  (upgradeCards.find((card) => !card.disabled) || upgradeCards[0])?.focus();
+  upgradePanelEl.focus({ preventScroll: true });
 }
 
 function showUpgradeTree() {
@@ -970,6 +998,8 @@ function startNextLevel() {
     player.y = clampToVessel(player.x, player.y, player.radius);
     addParticleBurst(player.x, player.y, "#b9ffe5", 18, 130);
   }
+
+  syncPauseUi();
 }
 
 function updateLevelCompletion() {
