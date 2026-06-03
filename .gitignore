@@ -4,6 +4,9 @@ Thumbs.db
 
 # Local high-size music backups. The game uses the matching MP3 files instead.
 assets/audio/Boss loop.wav
+assets/audio/Boss warning rumble.wav
+assets/audio/Cellular sparkle.wav
 assets/audio/Menu music.wav
 assets/audio/Normal vessel combat loop.wav
+assets/audio/Player death.wav
 assets/audio/Upgrade tree loop.wav

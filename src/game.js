@@ -46,14 +46,30 @@ const upgradeOverlay = document.querySelector("#upgradeOverlay");
 const upgradePanelEl = document.querySelector(".upgrade-panel");
 const upgradeIntroEl = document.querySelector("#upgradeIntro");
 const upgradeCards = Array.from(document.querySelectorAll(".upgrade-node"));
+const mobileControlsEl = document.querySelector(".mobile-controls");
+const mobileJoystickEl = document.querySelector("#mobileJoystick");
+const mobileJoystickKnobEl = document.querySelector("#mobileJoystickKnob");
+const mobileFireButton = document.querySelector("#mobileFireButton");
+const mobileDashButton = document.querySelector("#mobileDashButton");
+const mobilePulseButton = document.querySelector("#mobilePulseButton");
+const mobileDashHint = document.querySelector("#mobileDashHint");
+const mobilePulseHint = document.querySelector("#mobilePulseHint");
 
 const TAU = Math.PI * 2;
+const LEVEL_CLEAR_MUSIC_DELAY = 3.2;
+const BOSS_WARNING_DURATION = 17.2;
 const keys = new Set();
 const pointer = {
   active: false,
   down: false,
   x: 0,
   y: 0,
+};
+const mobileInput = {
+  joystickPointerId: null,
+  joystickX: 0,
+  joystickY: 0,
+  fire: false,
 };
 
 const audioManifest = {
@@ -67,6 +83,11 @@ const audioManifest = {
       src: "./assets/audio/Normal%20vessel%20combat%20loop.mp3",
       volume: 0.34,
       fadeLoop: 2.8,
+    },
+    highDanger: {
+      src: "./assets/audio/High-danger%20combat%20loop.mp3",
+      volume: 0.38,
+      fadeLoop: 2.2,
     },
     boss: {
       src: "./assets/audio/Boss%20loop.mp3",
@@ -84,6 +105,16 @@ const audioManifest = {
       src: "./assets/audio/Bloodstream%20ambience.wav",
       volume: 0.18,
       fadeLoop: 1.4,
+    },
+    cellularSparkle: {
+      src: "./assets/audio/Cellular%20sparkle.mp3",
+      volume: 0.05,
+      fadeLoop: 1.2,
+    },
+    deepVesselPulse: {
+      src: "./assets/audio/Deep%20Vessel%20Pulse.mp3",
+      volume: 0.06,
+      fadeLoop: 1.8,
     },
   },
   sfx: {
@@ -112,10 +143,32 @@ const audioManifest = {
       volume: 0.66,
       poolSize: 3,
     },
+    playerDeath: {
+      src: "./assets/audio/Player%20death.mp3",
+      volume: 0.72,
+      poolSize: 2,
+    },
     virusPop: {
       src: "./assets/audio/Virus%20pop.wav",
       volume: 0.58,
       poolSize: 6,
+    },
+    upgradeSelected: {
+      src: "./assets/audio/Upgrade%20selected.wav",
+      volume: 0.58,
+      poolSize: 3,
+    },
+    levelComplete: {
+      src: "./assets/audio/Level%20Complete%20Sting.wav",
+      volume: 0.64,
+      poolSize: 2,
+    },
+    bossWarning: {
+      src: "./assets/audio/Boss%20warning%20rumble.mp3",
+      volume: 0.58,
+      poolSize: 1,
+      maxDuration: BOSS_WARNING_DURATION,
+      fadeOut: 2,
     },
   },
 };
@@ -150,6 +203,13 @@ const state = {
   levelBannerTimer: 0,
   influenzaNoticeTimer: 0,
   levelTransitionTimer: 0,
+  levelClearMusicDelay: 0,
+  bossMusicDelay: 0,
+  bossWarningActive: false,
+  bossWarningTimer: 0,
+  pendingBossType: null,
+  runStartMusicDelay: 0,
+  ambienceIntroDelay: 0,
   levelComplete: false,
   awaitingUpgrade: false,
   bossSpawned: false,
@@ -422,24 +482,26 @@ const bossProfiles = {
     displayName: "Pox-Brick Boss",
     spriteGroup: "poxBoss",
     radius: 86,
-    hp: 34,
+    hp: 120,
     score: 650,
     color: "#d262e8",
     core: "#ff4f9a",
-    damage: 26,
+    damage: 28,
+    damageScale: 0.38,
     targetXRatio: 0.73,
-    attackInterval: 2.45,
+    attackInterval: 2.2,
     shadowBlur: 34,
   },
   adenovirusMini: {
     displayName: "Adenovirus Prism",
     spriteGroup: "adenovirusMini",
     radius: 58,
-    hp: 18,
+    hp: 56,
     score: 360,
     color: "#b566ff",
     core: "#f8b9ff",
     damage: 20,
+    damageScale: 0.52,
     targetXRatio: 0.68,
     attackInterval: 2.1,
     shadowBlur: 28,
@@ -448,11 +510,12 @@ const bossProfiles = {
     displayName: "Filovirus Ribbon",
     spriteGroup: "filovirusBoss",
     radius: 74,
-    hp: 38,
+    hp: 128,
     score: 720,
     color: "#4af7d5",
     core: "#8bff5d",
     damage: 24,
+    damageScale: 0.46,
     targetXRatio: 0.64,
     attackInterval: 2.7,
     shadowBlur: 30,
@@ -528,6 +591,8 @@ function createSfxPool(config) {
   const poolSize = config.poolSize ?? 3;
   return {
     volume: config.volume,
+    maxDuration: config.maxDuration ?? 0,
+    fadeOut: config.fadeOut ?? 0.25,
     index: 0,
     pool: Array.from({ length: poolSize }, () => {
       const element = new Audio(config.src);
@@ -666,16 +731,26 @@ function updateLoopTrack(track, targetVolume, dt) {
 }
 
 function getDesiredMusicKey() {
+  if (state.levelClearMusicDelay > 0 || state.bossMusicDelay > 0 || state.runStartMusicDelay > 0) {
+    return null;
+  }
   if (state.awaitingUpgrade || state.levelComplete) return "upgrade";
   if (!state.running || state.ended) return "menu";
   if (state.paused) return audio.activeMusicKey || "combat";
   if (isBossMission() && (state.bossSpawned || getActiveBoss())) return "boss";
+  if (state.player && (state.player.health <= 35 || (state.level >= 6 && getDistanceProgress() >= 0.62))) {
+    return "highDanger";
+  }
   return "combat";
 }
 
 function updateAudioScene(dt = 0.016) {
   if (!audio.assetsReady || !audio.unlocked) return;
 
+  state.levelClearMusicDelay = Math.max(0, state.levelClearMusicDelay - dt);
+  state.bossMusicDelay = Math.max(0, state.bossMusicDelay - dt);
+  state.runStartMusicDelay = Math.max(0, state.runStartMusicDelay - dt);
+  state.ambienceIntroDelay = Math.max(0, state.ambienceIntroDelay - dt);
   const musicKey = getDesiredMusicKey();
   if (!state.paused && musicKey) {
     audio.activeMusicKey = musicKey;
@@ -685,10 +760,18 @@ function updateAudioScene(dt = 0.016) {
     updateLoopTrack(track, key === musicKey ? track.baseVolume * pauseScale : 0, dt);
   }
 
-  const playAmbience = state.running && !state.ended && !state.awaitingUpgrade && !state.levelComplete;
-  const ambienceTrack = audio.ambience.bloodstream;
-  if (ambienceTrack) {
-    updateLoopTrack(ambienceTrack, playAmbience ? ambienceTrack.baseVolume * pauseScale : 0, dt);
+  const ambienceHeld = state.bossMusicDelay > 0 || state.runStartMusicDelay > 0 || state.ambienceIntroDelay > 0;
+  const playAmbience =
+    state.running && !state.ended && !state.awaitingUpgrade && !state.levelComplete && !ambienceHeld;
+  const ambientIntensity = playAmbience ? (state.paused ? 0.34 : 1) : 0;
+  const ambienceScales = {
+    bloodstream: 1,
+    cellularSparkle: state.level >= 3 ? 0.55 : 0,
+    deepVesselPulse:
+      state.level >= 6 || isBossMission() || (state.player && state.player.health <= 45) ? 0.75 : 0,
+  };
+  for (const [key, track] of Object.entries(audio.ambience)) {
+    updateLoopTrack(track, track.baseVolume * ambientIntensity * (ambienceScales[key] ?? 1), dt);
   }
 }
 
@@ -709,6 +792,14 @@ function playAssetSfx(name, fallback) {
 
   const element = sfx.pool[sfx.index];
   sfx.index = (sfx.index + 1) % sfx.pool.length;
+  if (element.audioStopTimer) {
+    window.clearTimeout(element.audioStopTimer);
+    element.audioStopTimer = null;
+  }
+  if (element.audioFadeFrame) {
+    window.cancelAnimationFrame(element.audioFadeFrame);
+    element.audioFadeFrame = null;
+  }
   element.pause();
   try {
     element.currentTime = 0;
@@ -719,6 +810,34 @@ function playAssetSfx(name, fallback) {
   const playPromise = element.play();
   if (playPromise) {
     playPromise.catch(() => fallback?.());
+  }
+
+  if (sfx.maxDuration > 0) {
+    const maxDurationMs = sfx.maxDuration * 1000;
+    const fadeDurationMs = Math.min(sfx.fadeOut * 1000, maxDurationMs);
+    const holdDurationMs = Math.max(0, maxDurationMs - fadeDurationMs);
+    element.audioStopTimer = window.setTimeout(() => {
+      const startVolume = element.volume;
+      const fadeStart = performance.now();
+      const fadeStep = (now) => {
+        const progress = clamp((now - fadeStart) / Math.max(1, fadeDurationMs), 0, 1);
+        element.volume = startVolume * (1 - progress);
+        if (progress < 1 && !element.paused) {
+          element.audioFadeFrame = window.requestAnimationFrame(fadeStep);
+          return;
+        }
+        element.pause();
+        try {
+          element.currentTime = 0;
+        } catch (error) {
+          // The next play will restart cleanly once the browser allows seeking.
+        }
+        element.volume = clamp(sfx.volume * audio.sfxMasterVolume, 0, 1);
+        element.audioFadeFrame = null;
+        element.audioStopTimer = null;
+      };
+      element.audioFadeFrame = window.requestAnimationFrame(fadeStep);
+    }, holdDurationMs);
   }
 }
 
@@ -806,8 +925,10 @@ function playAntibodyHitSfx() {
 }
 
 function playUpgradeSfx() {
-  playTone({ type: "triangle", start: 360, end: 920, duration: 0.2, gain: 0.11 });
-  playTone({ type: "sine", start: 680, end: 1320, duration: 0.16, gain: 0.07 });
+  playAssetSfx("upgradeSelected", () => {
+    playTone({ type: "triangle", start: 360, end: 920, duration: 0.2, gain: 0.11 });
+    playTone({ type: "sine", start: 680, end: 1320, duration: 0.16, gain: 0.07 });
+  });
 }
 
 function playPulseSfx() {
@@ -821,6 +942,27 @@ function playPlayerDamageSfx() {
   playAssetSfx("playerDamage", () => {
     playNoise({ duration: 0.18, gain: 0.16, frequency: 260 });
     playTone({ type: "sawtooth", start: 160, end: 82, duration: 0.15, gain: 0.1 });
+  });
+}
+
+function playPlayerDeathSfx() {
+  playAssetSfx("playerDeath", () => {
+    playNoise({ duration: 0.32, gain: 0.2, frequency: 180 });
+    playTone({ type: "sawtooth", start: 180, end: 46, duration: 0.34, gain: 0.13 });
+  });
+}
+
+function playLevelCompleteSfx() {
+  playAssetSfx("levelComplete", () => {
+    playTone({ type: "triangle", start: 520, end: 980, duration: 0.16, gain: 0.1 });
+    playTone({ type: "sine", start: 780, end: 1320, duration: 0.26, gain: 0.075 });
+  });
+}
+
+function playBossWarningSfx() {
+  playAssetSfx("bossWarning", () => {
+    playNoise({ duration: 0.44, gain: 0.2, frequency: 120 });
+    playTone({ type: "sawtooth", start: 84, end: 42, duration: 0.5, gain: 0.16 });
   });
 }
 
@@ -954,8 +1096,8 @@ function getDistanceProgress() {
 }
 
 function getLevelDifficultyMultiplier(level = state.level) {
-  if (level <= 5) return 1;
-  return Math.pow(1.18, level - 5);
+  if (level <= 4) return 1;
+  return Math.pow(1.2, level - 4);
 }
 
 function getLevelConfig(level) {
@@ -1029,6 +1171,13 @@ function configureLevel(level) {
   state.levelGoal = config.kills;
   state.levelKills = 0;
   state.levelTransitionTimer = 0;
+  state.levelClearMusicDelay = 0;
+  state.bossMusicDelay = 0;
+  state.bossWarningActive = false;
+  state.bossWarningTimer = 0;
+  state.pendingBossType = null;
+  state.runStartMusicDelay = 0;
+  state.ambienceIntroDelay = 1.4;
   state.influenzaNoticeTimer = 0;
   state.bossSpawned = false;
   state.bossDefeated = false;
@@ -1105,6 +1254,7 @@ function renderUpgradeCards() {
 function openLevelCompleteScreen() {
   state.levelComplete = true;
   state.levelTransitionTimer = 0;
+  state.levelClearMusicDelay = LEVEL_CLEAR_MUSIC_DELAY;
   pointer.down = false;
   keys.clear();
   resetHeldActionInputs();
@@ -1126,6 +1276,7 @@ function openLevelCompleteScreen() {
   nextMissionPreviewEl.textContent = `Next section: ${nextMission.name} (${nextMission.term})`;
   levelCompleteOverlay.hidden = false;
   upgradeOverlay.hidden = true;
+  playLevelCompleteSfx();
   syncPauseUi();
   showUpgradeButton.focus();
 }
@@ -1160,8 +1311,191 @@ function showUpgradeTree() {
 function resetHeldActionInputs() {
   state.dashInputHeld = false;
   state.pulseInputHeld = false;
+  mobileInput.fire = false;
+  resetMobileJoystick();
+  setMobileButtonPressed(mobileFireButton, false);
+  setMobileButtonPressed(mobileDashButton, false);
+  setMobileButtonPressed(mobilePulseButton, false);
   if (state.player) {
     state.player.horizontalSoundInput = 0;
+  }
+}
+
+function getKeyboardMovementInput() {
+  return {
+    horizontal:
+      (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0) -
+      (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0),
+    vertical:
+      (keys.has("ArrowDown") || keys.has("KeyS") ? 1 : 0) -
+      (keys.has("ArrowUp") || keys.has("KeyW") ? 1 : 0),
+  };
+}
+
+function getMovementInput() {
+  const keyboard = getKeyboardMovementInput();
+  let horizontal = keyboard.horizontal || mobileInput.joystickX;
+  let vertical = keyboard.vertical || mobileInput.joystickY;
+  const magnitude = Math.hypot(horizontal, vertical);
+
+  if (magnitude < 0.08) {
+    return { horizontal: 0, vertical: 0 };
+  }
+
+  if (magnitude > 1) {
+    horizontal /= magnitude;
+    vertical /= magnitude;
+  }
+
+  return { horizontal, vertical };
+}
+
+function setMobileButtonPressed(button, pressed) {
+  if (!button) return;
+  button.classList.toggle("is-pressed", pressed);
+  button.setAttribute("aria-pressed", String(pressed));
+}
+
+function resetMobileJoystick() {
+  mobileInput.joystickPointerId = null;
+  mobileInput.joystickX = 0;
+  mobileInput.joystickY = 0;
+  mobileJoystickEl?.classList.remove("is-active");
+  if (mobileJoystickKnobEl) {
+    mobileJoystickKnobEl.style.transform = "translate(-50%, -50%)";
+  }
+}
+
+function updateMobileJoystick(event) {
+  if (!mobileJoystickEl || !mobileJoystickKnobEl) return;
+
+  const rect = mobileJoystickEl.getBoundingClientRect();
+  const centerX = rect.left + rect.width / 2;
+  const centerY = rect.top + rect.height / 2;
+  const maxRadius = Math.max(24, Math.min(rect.width, rect.height) * 0.36);
+  let dx = event.clientX - centerX;
+  let dy = event.clientY - centerY;
+  const distanceFromCenter = Math.hypot(dx, dy);
+
+  if (distanceFromCenter > maxRadius) {
+    dx = (dx / distanceFromCenter) * maxRadius;
+    dy = (dy / distanceFromCenter) * maxRadius;
+  }
+
+  const normalizedX = dx / maxRadius;
+  const normalizedY = dy / maxRadius;
+  const deadzone = Math.hypot(normalizedX, normalizedY) < 0.08;
+  mobileInput.joystickX = deadzone ? 0 : normalizedX;
+  mobileInput.joystickY = deadzone ? 0 : normalizedY;
+  mobileJoystickKnobEl.style.transform =
+    `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+}
+
+function stopMobileControlEvent(event) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function isGameplayTouchReady() {
+  return state.running && !state.paused && !state.ended && !state.awaitingUpgrade && !state.levelComplete;
+}
+
+function bindMobileControls() {
+  if (mobileJoystickEl) {
+    mobileJoystickEl.addEventListener("pointerdown", (event) => {
+      stopMobileControlEvent(event);
+      ensureAudio();
+      mobileInput.joystickPointerId = event.pointerId;
+      mobileJoystickEl.setPointerCapture(event.pointerId);
+      mobileJoystickEl.classList.add("is-active");
+      updateMobileJoystick(event);
+    });
+
+    mobileJoystickEl.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== mobileInput.joystickPointerId) return;
+      stopMobileControlEvent(event);
+      updateMobileJoystick(event);
+    });
+
+    const endJoystick = (event) => {
+      if (event.pointerId !== mobileInput.joystickPointerId) return;
+      stopMobileControlEvent(event);
+      if (mobileJoystickEl.hasPointerCapture(event.pointerId)) {
+        mobileJoystickEl.releasePointerCapture(event.pointerId);
+      }
+      resetMobileJoystick();
+    };
+
+    mobileJoystickEl.addEventListener("pointerup", endJoystick);
+    mobileJoystickEl.addEventListener("pointercancel", endJoystick);
+    mobileJoystickEl.addEventListener("lostpointercapture", () => resetMobileJoystick());
+  }
+
+  if (mobileFireButton) {
+    mobileFireButton.addEventListener("pointerdown", (event) => {
+      stopMobileControlEvent(event);
+      ensureAudio();
+      if (!isGameplayTouchReady()) return;
+      mobileFireButton.setPointerCapture(event.pointerId);
+      mobileInput.fire = true;
+      setMobileButtonPressed(mobileFireButton, true);
+      fireShot();
+    });
+
+    const endFire = (event) => {
+      stopMobileControlEvent(event);
+      mobileInput.fire = false;
+      setMobileButtonPressed(mobileFireButton, false);
+      if (mobileFireButton.hasPointerCapture(event.pointerId)) {
+        mobileFireButton.releasePointerCapture(event.pointerId);
+      }
+    };
+
+    mobileFireButton.addEventListener("pointerup", endFire);
+    mobileFireButton.addEventListener("pointercancel", endFire);
+    mobileFireButton.addEventListener("lostpointercapture", () => {
+      mobileInput.fire = false;
+      setMobileButtonPressed(mobileFireButton, false);
+    });
+  }
+
+  if (mobileDashButton) {
+    mobileDashButton.addEventListener("pointerdown", (event) => {
+      stopMobileControlEvent(event);
+      ensureAudio();
+      if (!isGameplayTouchReady()) return;
+      const input = getMovementInput();
+      triggerDash(input.horizontal, input.vertical);
+      setMobileButtonPressed(mobileDashButton, true);
+      window.setTimeout(() => setMobileButtonPressed(mobileDashButton, false), 120);
+    });
+    mobileDashButton.addEventListener("pointerup", (event) => {
+      stopMobileControlEvent(event);
+      setMobileButtonPressed(mobileDashButton, false);
+    });
+    mobileDashButton.addEventListener("pointercancel", (event) => {
+      stopMobileControlEvent(event);
+      setMobileButtonPressed(mobileDashButton, false);
+    });
+  }
+
+  if (mobilePulseButton) {
+    mobilePulseButton.addEventListener("pointerdown", (event) => {
+      stopMobileControlEvent(event);
+      ensureAudio();
+      if (!isGameplayTouchReady()) return;
+      triggerComplementPulse();
+      setMobileButtonPressed(mobilePulseButton, true);
+      window.setTimeout(() => setMobileButtonPressed(mobilePulseButton, false), 120);
+    });
+    mobilePulseButton.addEventListener("pointerup", (event) => {
+      stopMobileControlEvent(event);
+      setMobileButtonPressed(mobilePulseButton, false);
+    });
+    mobilePulseButton.addEventListener("pointercancel", (event) => {
+      stopMobileControlEvent(event);
+      setMobileButtonPressed(mobilePulseButton, false);
+    });
   }
 }
 
@@ -1185,6 +1519,9 @@ function syncPauseUi() {
   missionPanelEl.hidden = !showGameplayUi;
   levelMeterEl.hidden = !showGameplayUi;
   levelBannerEl.hidden = !showGameplayUi;
+  if (mobileControlsEl) {
+    mobileControlsEl.hidden = !showGameplayUi;
+  }
   pauseOverlay.hidden = !state.paused;
   pauseButton.hidden =
     !state.running || state.ended || state.awaitingUpgrade || state.levelComplete;
@@ -1192,6 +1529,14 @@ function syncPauseUi() {
   pauseButton.setAttribute("aria-pressed", String(state.paused));
   pauseButton.setAttribute("aria-label", state.paused ? "Resume" : "Pause");
   pauseButtonText.textContent = state.paused ? "Resume" : "Pause";
+
+  if (!showGameplayUi) {
+    mobileInput.fire = false;
+    resetMobileJoystick();
+    setMobileButtonPressed(mobileFireButton, false);
+    setMobileButtonPressed(mobileDashButton, false);
+    setMobileButtonPressed(mobilePulseButton, false);
+  }
 }
 
 function setPaused(paused) {
@@ -1277,6 +1622,13 @@ function resetGame() {
   state.levelKills = 0;
   state.currentMission = getMission(1);
   state.levelTransitionTimer = 0;
+  state.levelClearMusicDelay = 0;
+  state.bossMusicDelay = 0;
+  state.bossWarningActive = false;
+  state.bossWarningTimer = 0;
+  state.pendingBossType = null;
+  state.runStartMusicDelay = 0;
+  state.ambienceIntroDelay = 0;
   state.influenzaNoticeTimer = 0;
   state.bossSpawned = false;
   state.bossDefeated = false;
@@ -1334,6 +1686,8 @@ function resetGame() {
   startButton.textContent = "Start Run";
   setRestartConfirmOpen(false);
   configureLevel(1);
+  state.runStartMusicDelay = 0.75;
+  state.ambienceIntroDelay = 2.25;
   overlay.hidden = true;
   gameOverOverlay.hidden = true;
   levelCompleteOverlay.hidden = true;
@@ -1353,7 +1707,9 @@ function updateHud() {
   levelProgressEl.style.transform = `scaleX(${getLevelProgress().combined})`;
   missionNameEl.textContent = mission.name;
   objectiveTextEl.textContent = mission.objective;
-  if (boss) {
+  if (state.bossWarningActive) {
+    virusesLeftEl.textContent = "Pathogen signal rising";
+  } else if (boss) {
     virusesLeftEl.textContent = `${Math.ceil(boss.hp)} integrity left`;
   } else if (isBossMission(mission) && !state.bossDefeated) {
     virusesLeftEl.textContent = `${virusesLeft} ${mission.target} left`;
@@ -1381,6 +1737,25 @@ function updateHud() {
   abilityPulseEl.classList.toggle("is-ready", pulseUnlocked && state.pulseCooldown <= 0);
   abilityDashEl.classList.toggle("is-locked", !dashUnlocked);
   abilityPulseEl.classList.toggle("is-locked", !pulseUnlocked);
+
+  const gameplayReady = state.running && !state.paused && !state.ended && !state.awaitingUpgrade && !state.levelComplete;
+  if (mobileFireButton) {
+    mobileFireButton.disabled = !gameplayReady;
+  }
+  if (mobileDashButton && mobileDashHint) {
+    const dashReady = dashUnlocked && state.dashCooldown <= 0 && gameplayReady;
+    mobileDashButton.disabled = !dashReady;
+    mobileDashButton.classList.toggle("is-ready", dashReady);
+    mobileDashButton.classList.toggle("is-locked", !dashUnlocked);
+    mobileDashHint.textContent = dashUnlocked ? dashStatus : "Locked";
+  }
+  if (mobilePulseButton && mobilePulseHint) {
+    const pulseReady = pulseUnlocked && state.pulseCooldown <= 0 && gameplayReady;
+    mobilePulseButton.disabled = !pulseReady;
+    mobilePulseButton.classList.toggle("is-ready", pulseReady);
+    mobilePulseButton.classList.toggle("is-locked", !pulseUnlocked);
+    mobilePulseHint.textContent = pulseUnlocked ? pulseStatus : "Locked";
+  }
 }
 
 function spawnRedCell(depth = rand(0.42, 1.12), x = state.width + rand(20, 180)) {
@@ -1571,7 +1946,7 @@ function spawnBoss(type) {
   const radius = profile.radius;
   const x = state.width + radius + 150;
   const y = clampToVessel(x, state.height * 0.5, radius);
-  const bossHp = Math.ceil(profile.hp * (1 + Math.max(0, difficulty - 1) * 0.68));
+  const bossHp = Math.ceil(profile.hp * (1 + Math.max(0, difficulty - 1) * 0.9));
   const boss = {
     type,
     isBoss: true,
@@ -2019,7 +2394,7 @@ function triggerComplementPulse() {
     if (virus.dead) continue;
     const dist = distance(player, virus);
     if (dist > radius + virus.radius) continue;
-    virus.hp -= damage;
+    virus.hp -= damage * getVirusDamageScale(virus);
     virus.hit = 0.2;
     if (virus.hp <= 0) destroyVirus(virus, "pulse");
     else {
@@ -2079,12 +2454,7 @@ function updatePlayer(dt) {
   const swimKick = 44;
   let ax = 0;
   let ay = 0;
-  const horizontalInput =
-    (keys.has("ArrowRight") || keys.has("KeyD") ? 1 : 0) -
-    (keys.has("ArrowLeft") || keys.has("KeyA") ? 1 : 0);
-  const verticalInput =
-    (keys.has("ArrowDown") || keys.has("KeyS") ? 1 : 0) -
-    (keys.has("ArrowUp") || keys.has("KeyW") ? 1 : 0);
+  const { horizontal: horizontalInput, vertical: verticalInput } = getMovementInput();
 
   if (horizontalInput < 0) ax -= accel;
   if (horizontalInput > 0) ax += accel;
@@ -2137,16 +2507,17 @@ function updatePlayer(dt) {
   player.blink += dt;
   player.horizontalPose = lerp(player.horizontalPose ?? 0, horizontalInput, clamp(dt * 8.5, 0, 1));
 
-  if (horizontalInput !== 0 && (player.horizontalSoundInput ?? 0) !== horizontalInput) {
-    playSwimSurgeSfx(horizontalInput);
+  const horizontalSoundInput = Math.abs(horizontalInput) > 0.35 ? Math.sign(horizontalInput) : 0;
+  if (horizontalSoundInput !== 0 && (player.horizontalSoundInput ?? 0) !== horizontalSoundInput) {
+    playSwimSurgeSfx(horizontalSoundInput);
   }
-  player.horizontalSoundInput = horizontalInput;
+  player.horizontalSoundInput = horizontalSoundInput;
 
   const visualAim = getVisualAimPoint();
   const desiredAimAngle = Math.atan2(visualAim.y - player.y, visualAim.x - player.x);
   player.aimAngle = lerpAngle(player.aimAngle, desiredAimAngle, clamp(dt * 5.8, 0, 0.16));
 
-  if (keys.has("Space") || pointer.down) fireShot();
+  if (keys.has("Space") || pointer.down || mobileInput.fire) fireShot();
 }
 
 function updateSpawns(dt) {
@@ -2161,17 +2532,34 @@ function updateSpawns(dt) {
   const bossTriggerReached =
     encounterActive && getDistanceProgress() >= (state.bossTriggerProgress || 0.86);
 
-  if (bossTriggerReached && !state.bossSpawned) {
+  if (state.bossWarningActive) {
+    state.bossWarningTimer = Math.max(0, state.bossWarningTimer - dt);
+    state.nextVirus = Math.max(state.nextVirus, 0.7);
+    state.nextPlatelet = Math.max(state.nextPlatelet, 2.4);
+    if (state.bossWarningTimer === 0 && !state.bossSpawned) {
+      spawnBoss(state.pendingBossType || mission.bossType);
+      state.bossSpawned = true;
+      state.bossWarningActive = false;
+      state.pendingBossType = null;
+      state.bossMusicDelay = 0;
+      state.nextVirus = 1.6;
+      state.nextPlatelet = 5.8;
+    }
+  } else if (bossTriggerReached && !state.bossSpawned) {
     state.viruses = [];
     state.shots = [];
     state.lockTarget = null;
-    spawnBoss(mission.bossType);
-    state.bossSpawned = true;
-    state.nextVirus = 1.6;
-    state.nextPlatelet = 5.8;
+    state.bossWarningActive = true;
+    state.bossWarningTimer = BOSS_WARNING_DURATION;
+    state.pendingBossType = mission.bossType;
+    state.bossMusicDelay = BOSS_WARNING_DURATION;
+    state.nextVirus = 0.9;
+    state.nextPlatelet = 3.2;
+    showLevelBanner("Pathogen signal building", 2.35);
+    playBossWarningSfx();
   }
 
-  if ((!encounterActive || !state.bossSpawned) && state.nextVirus <= 0) {
+  if ((!encounterActive || (!state.bossSpawned && !state.bossWarningActive)) && state.nextVirus <= 0) {
     spawnVirus();
     state.nextVirus = rand(0.78, 1.35) * levelConfig.spawnScale;
   }
@@ -2181,7 +2569,7 @@ function updateSpawns(dt) {
     state.nextRedCell = rand(0.45, 0.9);
   }
 
-  if (state.nextPlatelet <= 0) {
+  if (!state.bossWarningActive && state.nextPlatelet <= 0) {
     spawnPlatelet();
     state.nextPlatelet = rand(4.4, 7.2) * Math.max(0.72, levelConfig.spawnScale);
   }
@@ -2409,6 +2797,11 @@ function getVirusCollisionRadius(virus) {
   return virus.radius;
 }
 
+function getVirusDamageScale(virus) {
+  if (!isBossVirus(virus)) return 1;
+  return bossProfiles[virus.type]?.damageScale ?? 1;
+}
+
 function applyShotHit(virus, shot) {
   if (virus.type === "adenovirusMini" && !virus.shieldOpen) {
     virus.hit = 0.18;
@@ -2419,7 +2812,7 @@ function applyShotHit(virus, shot) {
     return;
   }
 
-  virus.hp -= shot.damage;
+  virus.hp -= shot.damage * getVirusDamageScale(virus);
   virus.hit = 0.12;
   shot.life = -1;
   addParticleBurst(shot.x, shot.y, palette.cyan, isBossVirus(virus) ? 14 : 9, 95);
@@ -2500,7 +2893,10 @@ function hurtPlayer(amount, x, y, color, soft = false) {
   player.hurtTimer = soft ? 0.35 : 0.7;
   player.invulnerable = soft ? player.invulnerable : 0.55;
   addParticleBurst(x, y, color, soft ? 4 : 16, soft ? 55 : 150);
-  if (!soft) playPlayerDamageSfx();
+  if (!soft) {
+    if (player.health <= 0) playPlayerDeathSfx();
+    else playPlayerDamageSfx();
+  }
 
   if (player.health <= 0) {
     endGame();
@@ -3396,6 +3792,7 @@ showUpgradeButton.addEventListener("click", showUpgradeTree);
 for (const card of upgradeCards) {
   card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
 }
+bindMobileControls();
 
 resize();
 renderUpgradeCards();

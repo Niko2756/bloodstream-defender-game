@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bloodstream Defender</title>
+    <link rel="icon" href="data:," />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -52,8 +53,37 @@
 
       <section id="levelBanner" class="level-banner" aria-live="polite"></section>
 
+      <section class="mobile-controls" aria-label="Mobile touch controls" hidden>
+        <div id="mobileJoystick" class="mobile-joystick" aria-label="Move white blood cell">
+          <span class="mobile-joystick__ring" aria-hidden="true">
+            <span id="mobileJoystickKnob" class="mobile-joystick__knob"></span>
+          </span>
+        </div>
+        <div class="mobile-actions" aria-label="Combat actions">
+          <button id="mobileFireButton" class="mobile-action mobile-action--fire" type="button" aria-label="Fire antibodies">
+            <span>Fire</span>
+          </button>
+          <button id="mobileDashButton" class="mobile-action mobile-action--dash" type="button" aria-label="Chemotaxis Dash">
+            <span>Dash</span>
+            <small id="mobileDashHint">Locked</small>
+          </button>
+          <button id="mobilePulseButton" class="mobile-action mobile-action--pulse" type="button" aria-label="Complement Pulse">
+            <span>Pulse</span>
+            <small id="mobilePulseHint">Locked</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="orientation-prompt" aria-label="Rotate phone to play">
+        <div>
+          <span>Rotate Phone</span>
+          <strong>Landscape view is ready for play.</strong>
+        </div>
+      </section>
+
       <section id="startOverlay" class="overlay">
         <h1>Bloodstream Defender</h1>
+        <p class="touch-start-note">Tap Start once to unlock audio on mobile.</p>
         <p id="runSummary" class="run-summary" hidden></p>
         <button id="startButton" class="primary-action" type="button">Start Run</button>
       </section>

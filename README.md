@@ -8,6 +8,18 @@ The idea started from a simple wish: I have always wanted to make a game about w
 
 Play the current build at [humble-marvel-dx2j.here.now](https://humble-marvel-dx2j.here.now/).
 
+## Mobile Web
+
+The here.now build is playable on phone browsers as a landscape-first web game. Open the live demo link, rotate the phone to landscape, then tap **Start Run** once so iOS/Safari and mobile Chrome can unlock music and sound effects.
+
+Mobile controls:
+
+- Move: left thumb virtual joystick
+- Fire antibodies: hold the right-side **Fire** button
+- Chemotaxis Dash: tap **Dash** after choosing the Chemotaxis Dash upgrade
+- Complement Pulse: tap **Pulse** after choosing the Complement Pulse upgrade
+- Pause/resume: use the pause button in the top-right HUD
+
 ## Screenshots
 
 ![Bloodstream Defender title screen](docs/screenshots/title-screen.png)
@@ -42,6 +54,8 @@ http://localhost:8000/
 
 ## Controls
 
+Desktop controls:
+
 - Move: `WASD` or arrow keys
 - Fire antibodies: `Space`, click, or tap
 - Chemotaxis Dash: `Shift` after choosing the Chemotaxis Dash upgrade
@@ -75,8 +89,9 @@ Later sections add escalating pressure. Influenza virions arrive in level 4 and 
 - Generated white blood cell, virus, platelet, red blood cell, antibody, influenza, and boss sprites
 - Multi-layer generated blood-vessel backgrounds with parallax scrolling
 - Generated HUD ornament art for the mission panel, health bar, score, level display, pause button, ability status chips, and level progress bar
+- Landscape mobile web controls with a left thumb joystick, hold-to-fire antibody button, one-tap Dash and Pulse buttons, and a portrait rotate prompt
 - Pause menu with restart confirmation, level-complete screen, ImageGen-guided upgrade tree, and immune-run summary screen
-- Phase-one Suno audio: menu/combat/boss/upgrade music, bloodstream ambience, and core combat sound effects for antibodies, hits, dash, complement pulse, player damage, and virus pops
+- Layered Suno audio: menu/combat/boss/upgrade music, level-clear sting before upgrade music, boss-warning rumble before boss loop, bloodstream ambience, and combat sound effects for antibodies, hits, dash, complement pulse, player damage, player death, upgrade selection, and virus pops
 
 ## Project Structure
 
