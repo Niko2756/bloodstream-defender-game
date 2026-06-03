@@ -45,7 +45,7 @@ http://localhost:8000/
 - Move: `WASD` or arrow keys
 - Fire antibodies: `Space`, click, or tap
 - Chemotaxis Dash: `Shift` after choosing the Chemotaxis Dash upgrade
-- Complement Pulse: `E` or `Q` after choosing the Complement Pulse upgrade
+- Complement Pulse: `E`, `Q`, `Enter`, or `Numpad Enter` after choosing the Complement Pulse upgrade
 - Pause/resume: `P`, `Escape`, or the pause button
 - Restart: use the pause menu, which asks for confirmation, or the end screen
 
@@ -76,14 +76,14 @@ Later sections add escalating pressure. Influenza virions arrive in level 4 and 
 - Multi-layer generated blood-vessel backgrounds with parallax scrolling
 - Generated HUD ornament art for the mission panel, health bar, score, level display, pause button, ability status chips, and level progress bar
 - Pause menu with restart confirmation, level-complete screen, ImageGen-guided upgrade tree, and immune-run summary screen
-- Procedural sound effects for shooting, movement surges, and virus pops
+- Phase-one Suno audio: menu/combat/boss/upgrade music, bloodstream ambience, and core combat sound effects for antibodies, hits, dash, complement pulse, player damage, and virus pops
 
 ## Project Structure
 
 - `index.html` contains the game canvas and HUD markup.
 - `styles.css` controls the page, HUD, start overlay, pause menu, level-complete screen, upgrade tree, and game-over report styling.
 - `src/game.js` contains the game loop, movement, combat, spawning, drawing, audio, and state handling.
-- `assets/` contains generated concept art, sprites, and parallax background layers.
+- `assets/` contains generated concept art, sprites, audio, and parallax background layers.
 - `docs/` contains art direction notes, asset pipeline notes, parallax notes, and README screenshots.
 
 ## Development Notes

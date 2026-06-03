@@ -56,9 +56,81 @@ const pointer = {
   y: 0,
 };
 
+const audioManifest = {
+  music: {
+    menu: {
+      src: "./assets/audio/Menu%20music.mp3",
+      volume: 0.46,
+      fadeLoop: 2.6,
+    },
+    combat: {
+      src: "./assets/audio/Normal%20vessel%20combat%20loop.mp3",
+      volume: 0.34,
+      fadeLoop: 2.8,
+    },
+    boss: {
+      src: "./assets/audio/Boss%20loop.mp3",
+      volume: 0.4,
+      fadeLoop: 2.4,
+    },
+    upgrade: {
+      src: "./assets/audio/Upgrade%20tree%20loop.mp3",
+      volume: 0.36,
+      fadeLoop: 2.2,
+    },
+  },
+  ambience: {
+    bloodstream: {
+      src: "./assets/audio/Bloodstream%20ambience.wav",
+      volume: 0.18,
+      fadeLoop: 1.4,
+    },
+  },
+  sfx: {
+    antibodyShot: {
+      src: "./assets/audio/Antibody%20shot.wav",
+      volume: 0.54,
+      poolSize: 6,
+    },
+    antibodyHit: {
+      src: "./assets/audio/Antibody%20hit.wav",
+      volume: 0.5,
+      poolSize: 5,
+    },
+    chemotaxisDash: {
+      src: "./assets/audio/Chemotaxis%20dash.wav",
+      volume: 0.6,
+      poolSize: 3,
+    },
+    complementPulse: {
+      src: "./assets/audio/Complement%20pulse.wav",
+      volume: 0.68,
+      poolSize: 3,
+    },
+    playerDamage: {
+      src: "./assets/audio/Player%20damage.wav",
+      volume: 0.66,
+      poolSize: 3,
+    },
+    virusPop: {
+      src: "./assets/audio/Virus%20pop.wav",
+      volume: 0.58,
+      poolSize: 6,
+    },
+  },
+};
+
 const audio = {
   context: null,
   master: null,
+  assetsReady: false,
+  unlocked: false,
+  music: {},
+  ambience: {},
+  sfx: {},
+  activeMusicKey: null,
+  musicFadeSpeed: 1.8,
+  sfxMasterVolume: 0.95,
 };
 
 const state = {
@@ -114,6 +186,8 @@ const state = {
   dashTimer: 0,
   pulseCooldown: 0,
   pulseTimer: 0,
+  dashInputHeld: false,
+  pulseInputHeld: false,
   shake: 0,
 };
 
@@ -223,7 +297,7 @@ const upgradeOptions = [
     icon: "C",
     medallion: "./assets/ui/upgrade-medallion-complement.png",
     controlIntro: "Use",
-    controls: ["E", "Q"],
+    controls: ["E", "Q", "Enter"],
     controlOutro: "after unlocking",
     body:
       "Unlocks a radial pulse that damages nearby viruses and breaks platelet hazards before they reach you.",
@@ -430,8 +504,66 @@ function getSpriteAsset(spriteGroup) {
   return spriteAtlas;
 }
 
+function createLoopTrack(config) {
+  const element = new Audio(config.src);
+  const track = {
+    element,
+    baseVolume: config.volume,
+    currentVolume: 0,
+    targetVolume: 0,
+    fadeLoop: config.fadeLoop ?? 0,
+    loopFadeIn: config.fadeLoop ?? 0,
+    loopMultiplier: 1,
+    shouldPlay: false,
+  };
+
+  element.preload = "auto";
+  element.loop = false;
+  element.volume = 0;
+  element.addEventListener("ended", () => restartLoopTrack(track));
+  return track;
+}
+
+function createSfxPool(config) {
+  const poolSize = config.poolSize ?? 3;
+  return {
+    volume: config.volume,
+    index: 0,
+    pool: Array.from({ length: poolSize }, () => {
+      const element = new Audio(config.src);
+      element.preload = "auto";
+      element.volume = config.volume * audio.sfxMasterVolume;
+      return element;
+    }),
+  };
+}
+
+function prepareAudioAssets() {
+  if (audio.assetsReady) return;
+
+  audio.music = Object.fromEntries(
+    Object.entries(audioManifest.music).map(([key, config]) => [key, createLoopTrack(config)]),
+  );
+  audio.ambience = Object.fromEntries(
+    Object.entries(audioManifest.ambience).map(([key, config]) => [
+      key,
+      createLoopTrack(config),
+    ]),
+  );
+  audio.sfx = Object.fromEntries(
+    Object.entries(audioManifest.sfx).map(([key, config]) => [key, createSfxPool(config)]),
+  );
+  audio.assetsReady = true;
+}
+
 function ensureAudio() {
-  if (!window.AudioContext && !window.webkitAudioContext) return null;
+  prepareAudioAssets();
+  audio.unlocked = true;
+
+  if (!window.AudioContext && !window.webkitAudioContext) {
+    updateAudioScene(0);
+    return null;
+  }
 
   if (!audio.context) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -449,10 +581,145 @@ function ensureAudio() {
   }
 
   if (audio.context.state === "suspended") {
-    audio.context.resume();
+    void audio.context.resume();
   }
 
+  updateAudioScene(0);
   return audio.context;
+}
+
+function tryPlayElement(element) {
+  const playPromise = element.play();
+  if (playPromise) {
+    playPromise.catch(() => {});
+  }
+}
+
+function restartLoopTrack(track) {
+  if (!track.shouldPlay) return;
+
+  try {
+    track.element.currentTime = 0;
+  } catch (error) {
+    return;
+  }
+  track.loopFadeIn = track.fadeLoop;
+  track.loopMultiplier = track.fadeLoop > 0 ? 0 : 1;
+  tryPlayElement(track.element);
+}
+
+function updateLoopEnvelope(track, dt) {
+  const { element, fadeLoop } = track;
+  if (fadeLoop <= 0 || !Number.isFinite(element.duration) || element.duration <= fadeLoop + 0.35) {
+    track.loopMultiplier = 1;
+    return;
+  }
+
+  if (element.paused || !track.shouldPlay) {
+    track.loopMultiplier = 1;
+    return;
+  }
+
+  const remaining = element.duration - element.currentTime;
+  if (remaining <= 0.08) {
+    restartLoopTrack(track);
+    return;
+  }
+
+  if (remaining <= fadeLoop) {
+    track.loopMultiplier = clamp(remaining / fadeLoop, 0, 1);
+    return;
+  }
+
+  if (track.loopFadeIn > 0) {
+    track.loopFadeIn = Math.max(0, track.loopFadeIn - dt);
+    track.loopMultiplier = clamp(1 - track.loopFadeIn / fadeLoop, 0, 1);
+    return;
+  }
+
+  track.loopMultiplier = 1;
+}
+
+function updateLoopTrack(track, targetVolume, dt) {
+  track.shouldPlay = targetVolume > 0.001;
+  track.targetVolume = targetVolume;
+
+  if (track.shouldPlay && track.element.paused) {
+    tryPlayElement(track.element);
+  }
+
+  const fadeAmount = clamp(dt * audio.musicFadeSpeed, 0, 1);
+  track.currentVolume = lerp(track.currentVolume, track.targetVolume, fadeAmount);
+  updateLoopEnvelope(track, dt);
+  track.element.volume = clamp(track.currentVolume * track.loopMultiplier, 0, 1);
+
+  if (!track.shouldPlay && track.currentVolume < 0.003 && !track.element.paused) {
+    track.element.pause();
+    track.loopFadeIn = track.fadeLoop;
+    track.loopMultiplier = track.fadeLoop > 0 ? 0 : 1;
+    try {
+      track.element.currentTime = 0;
+    } catch (error) {
+      // Some browsers disallow seeking before metadata loads.
+    }
+  }
+}
+
+function getDesiredMusicKey() {
+  if (state.awaitingUpgrade || state.levelComplete) return "upgrade";
+  if (!state.running || state.ended) return "menu";
+  if (state.paused) return audio.activeMusicKey || "combat";
+  if (isBossMission() && (state.bossSpawned || getActiveBoss())) return "boss";
+  return "combat";
+}
+
+function updateAudioScene(dt = 0.016) {
+  if (!audio.assetsReady || !audio.unlocked) return;
+
+  const musicKey = getDesiredMusicKey();
+  if (!state.paused && musicKey) {
+    audio.activeMusicKey = musicKey;
+  }
+  const pauseScale = state.paused ? 0.34 : 1;
+  for (const [key, track] of Object.entries(audio.music)) {
+    updateLoopTrack(track, key === musicKey ? track.baseVolume * pauseScale : 0, dt);
+  }
+
+  const playAmbience = state.running && !state.ended && !state.awaitingUpgrade && !state.levelComplete;
+  const ambienceTrack = audio.ambience.bloodstream;
+  if (ambienceTrack) {
+    updateLoopTrack(ambienceTrack, playAmbience ? ambienceTrack.baseVolume * pauseScale : 0, dt);
+  }
+}
+
+function unlockMenuAudio() {
+  const menuVisible = !overlay.hidden && !state.running && !state.awaitingUpgrade && !state.levelComplete;
+  if (!menuVisible) return;
+  ensureAudio();
+  updateAudioScene(0);
+}
+
+function playAssetSfx(name, fallback) {
+  prepareAudioAssets();
+  const sfx = audio.sfx[name];
+  if (!audio.unlocked || !sfx) {
+    fallback?.();
+    return;
+  }
+
+  const element = sfx.pool[sfx.index];
+  sfx.index = (sfx.index + 1) % sfx.pool.length;
+  element.pause();
+  try {
+    element.currentTime = 0;
+  } catch (error) {
+    // The next play still works; the browser just was not ready to seek yet.
+  }
+  element.volume = clamp(sfx.volume * audio.sfxMasterVolume, 0, 1);
+  const playPromise = element.play();
+  if (playPromise) {
+    playPromise.catch(() => fallback?.());
+  }
 }
 
 function playTone({ type = "sine", start = 440, end = start, duration = 0.12, gain = 0.08 }) {
@@ -506,24 +773,36 @@ function playNoise({ duration = 0.16, gain = 0.06, frequency = 900 }) {
 }
 
 function playShootSfx() {
-  playTone({ type: "triangle", start: 980, end: 520, duration: 0.1, gain: 0.12 });
-  playTone({ type: "sine", start: 1520, end: 880, duration: 0.055, gain: 0.06 });
+  playAssetSfx("antibodyShot", () => {
+    playTone({ type: "triangle", start: 980, end: 520, duration: 0.1, gain: 0.12 });
+    playTone({ type: "sine", start: 1520, end: 880, duration: 0.055, gain: 0.06 });
+  });
 }
 
 function playSwimSurgeSfx(direction) {
-  playNoise({ duration: 0.18, gain: 0.11, frequency: direction > 0 ? 720 : 520 });
-  playTone({
-    type: "sine",
-    start: direction > 0 ? 180 : 150,
-    end: direction > 0 ? 260 : 95,
-    duration: 0.16,
-    gain: 0.064,
+  playAssetSfx("chemotaxisDash", () => {
+    playNoise({ duration: 0.18, gain: 0.11, frequency: direction > 0 ? 720 : 520 });
+    playTone({
+      type: "sine",
+      start: direction > 0 ? 180 : 150,
+      end: direction > 0 ? 260 : 95,
+      duration: 0.16,
+      gain: 0.064,
+    });
   });
 }
 
 function playVirusPopSfx() {
-  playNoise({ duration: 0.22, gain: 0.18, frequency: 640 });
-  playTone({ type: "sawtooth", start: 180, end: 58, duration: 0.18, gain: 0.12 });
+  playAssetSfx("virusPop", () => {
+    playNoise({ duration: 0.22, gain: 0.18, frequency: 640 });
+    playTone({ type: "sawtooth", start: 180, end: 58, duration: 0.18, gain: 0.12 });
+  });
+}
+
+function playAntibodyHitSfx() {
+  playAssetSfx("antibodyHit", () => {
+    playTone({ type: "triangle", start: 440, end: 720, duration: 0.09, gain: 0.08 });
+  });
 }
 
 function playUpgradeSfx() {
@@ -532,8 +811,17 @@ function playUpgradeSfx() {
 }
 
 function playPulseSfx() {
-  playNoise({ duration: 0.28, gain: 0.16, frequency: 420 });
-  playTone({ type: "sine", start: 240, end: 760, duration: 0.22, gain: 0.12 });
+  playAssetSfx("complementPulse", () => {
+    playNoise({ duration: 0.28, gain: 0.16, frequency: 420 });
+    playTone({ type: "sine", start: 240, end: 760, duration: 0.22, gain: 0.12 });
+  });
+}
+
+function playPlayerDamageSfx() {
+  playAssetSfx("playerDamage", () => {
+    playNoise({ duration: 0.18, gain: 0.16, frequency: 260 });
+    playTone({ type: "sawtooth", start: 160, end: 82, duration: 0.15, gain: 0.1 });
+  });
 }
 
 function drawImageFrame(asset, frame, x, y, targetHeight, options = {}) {
@@ -819,6 +1107,7 @@ function openLevelCompleteScreen() {
   state.levelTransitionTimer = 0;
   pointer.down = false;
   keys.clear();
+  resetHeldActionInputs();
   state.viruses = [];
   state.platelets = [];
   state.shots = [];
@@ -847,6 +1136,7 @@ function openUpgradeMenu() {
   state.levelTransitionTimer = 0;
   pointer.down = false;
   keys.clear();
+  resetHeldActionInputs();
   state.viruses = [];
   state.platelets = [];
   state.shots = [];
@@ -865,6 +1155,14 @@ function showUpgradeTree() {
   state.levelComplete = false;
   levelCompleteOverlay.hidden = true;
   openUpgradeMenu();
+}
+
+function resetHeldActionInputs() {
+  state.dashInputHeld = false;
+  state.pulseInputHeld = false;
+  if (state.player) {
+    state.player.horizontalSoundInput = 0;
+  }
 }
 
 function chooseUpgrade(id) {
@@ -903,6 +1201,7 @@ function setPaused(paused) {
   if (paused) {
     pointer.down = false;
     keys.clear();
+    resetHeldActionInputs();
   } else {
     setRestartConfirmOpen(false);
   }
@@ -1002,7 +1301,7 @@ function resetGame() {
     aimAngle: 0,
     spriteFrame: 0,
     horizontalPose: 0,
-    boostSoundTimer: 0,
+    horizontalSoundInput: 0,
   };
   state.shots = [];
   state.viruses = [];
@@ -1026,6 +1325,8 @@ function resetGame() {
   state.dashTimer = 0;
   state.pulseCooldown = 0;
   state.pulseTimer = 0;
+  state.dashInputHeld = false;
+  state.pulseInputHeld = false;
   state.shake = 0;
   overlay.querySelector("h1").textContent = "Bloodstream Defender";
   runSummaryEl.hidden = true;
@@ -1790,13 +2091,18 @@ function updatePlayer(dt) {
   if (verticalInput < 0) ay -= accel;
   if (verticalInput > 0) ay += accel;
 
-  if (keys.has("ShiftLeft") || keys.has("ShiftRight")) {
+  const dashPressed = keys.has("ShiftLeft") || keys.has("ShiftRight");
+  if (dashPressed && !state.dashInputHeld) {
     triggerDash(horizontalInput, verticalInput);
   }
+  state.dashInputHeld = dashPressed;
 
-  if (keys.has("KeyE") || keys.has("KeyQ")) {
+  const pulsePressed =
+    keys.has("KeyE") || keys.has("KeyQ") || keys.has("Enter") || keys.has("NumpadEnter");
+  if (pulsePressed && !state.pulseInputHeld) {
     triggerComplementPulse();
   }
+  state.pulseInputHeld = pulsePressed;
 
   const maxSpeed = 350 + state.upgrades.dash * 18 + (state.dashTimer > 0 ? 320 : 0);
 
@@ -1830,12 +2136,11 @@ function updatePlayer(dt) {
   player.invulnerable = Math.max(0, player.invulnerable - dt);
   player.blink += dt;
   player.horizontalPose = lerp(player.horizontalPose ?? 0, horizontalInput, clamp(dt * 8.5, 0, 1));
-  player.boostSoundTimer = Math.max(0, (player.boostSoundTimer ?? 0) - dt);
 
-  if (horizontalInput !== 0 && Math.abs(player.vx) > 76 && player.boostSoundTimer === 0) {
+  if (horizontalInput !== 0 && (player.horizontalSoundInput ?? 0) !== horizontalInput) {
     playSwimSurgeSfx(horizontalInput);
-    player.boostSoundTimer = 0.42;
   }
+  player.horizontalSoundInput = horizontalInput;
 
   const visualAim = getVisualAimPoint();
   const desiredAimAngle = Math.atan2(visualAim.y - player.y, visualAim.x - player.x);
@@ -2109,6 +2414,7 @@ function applyShotHit(virus, shot) {
     virus.hit = 0.18;
     shot.life = -1;
     state.shake = Math.max(state.shake, 0.08);
+    playAntibodyHitSfx();
     addParticleBurst(shot.x, shot.y, "#9ff8ff", 8, 92);
     return;
   }
@@ -2119,6 +2425,8 @@ function applyShotHit(virus, shot) {
   addParticleBurst(shot.x, shot.y, palette.cyan, isBossVirus(virus) ? 14 : 9, 95);
   if (virus.hp <= 0) {
     destroyVirus(virus);
+  } else {
+    playAntibodyHitSfx();
   }
 }
 
@@ -2192,6 +2500,7 @@ function hurtPlayer(amount, x, y, color, soft = false) {
   player.hurtTimer = soft ? 0.35 : 0.7;
   player.invulnerable = soft ? player.invulnerable : 0.55;
   addParticleBurst(x, y, color, soft ? 4 : 16, soft ? 55 : 150);
+  if (!soft) playPlayerDamageSfx();
 
   if (player.health <= 0) {
     endGame();
@@ -2955,6 +3264,7 @@ function frame(now) {
   if (!state.paused && !state.awaitingUpgrade && !state.levelComplete) {
     update(dt);
   }
+  updateAudioScene(dt);
   draw();
   requestAnimationFrame(frame);
 }
@@ -2967,8 +3277,11 @@ function updatePointer(event) {
 }
 
 window.addEventListener("resize", resize);
+window.addEventListener("pointerdown", unlockMenuAudio, { capture: true });
+window.addEventListener("touchstart", unlockMenuAudio, { capture: true, passive: true });
 
 window.addEventListener("keydown", (event) => {
+  unlockMenuAudio();
   ensureAudio();
 
   if (event.code === "Escape" || event.code === "KeyP") {
@@ -3009,6 +3322,8 @@ window.addEventListener("keydown", (event) => {
     event.code === "ShiftRight" ||
     event.code === "KeyE" ||
     event.code === "KeyQ" ||
+    event.code === "Enter" ||
+    event.code === "NumpadEnter" ||
     event.code === "KeyW" ||
     event.code === "KeyA" ||
     event.code === "KeyS" ||
@@ -3025,6 +3340,12 @@ window.addEventListener("keydown", (event) => {
 
 window.addEventListener("keyup", (event) => {
   keys.delete(event.code);
+});
+
+window.addEventListener("blur", () => {
+  keys.clear();
+  pointer.down = false;
+  resetHeldActionInputs();
 });
 
 canvas.addEventListener("pointermove", updatePointer);

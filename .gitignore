@@ -1,3 +1,9 @@
 .DS_Store
 Thumbs.db
 .herenow/
+
+# Local high-size music backups. The game uses the matching MP3 files instead.
+assets/audio/Boss loop.wav
+assets/audio/Menu music.wav
+assets/audio/Normal vessel combat loop.wav
+assets/audio/Upgrade tree loop.wav
