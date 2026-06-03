@@ -63,7 +63,15 @@
           <h1 id="pauseTitle">Paused</h1>
           <div class="pause-menu">
             <button id="resumeButton" class="menu-action menu-action--primary" type="button">Resume</button>
-            <button id="restartButton" class="menu-action menu-action--secondary" type="button">Restart Run</button>
+            <button id="restartButton" class="menu-action menu-action--secondary" type="button" aria-expanded="false" aria-controls="restartConfirm">Restart Run</button>
+            <div id="restartConfirm" class="restart-confirm" role="group" aria-label="Confirm restart run" hidden>
+              <p class="restart-confirm__title">Restart this run?</p>
+              <p class="restart-confirm__copy">Current level progress and upgrades will be lost.</p>
+              <div class="restart-confirm__actions">
+                <button id="cancelRestartButton" class="menu-action menu-action--secondary" type="button">Keep Playing</button>
+                <button id="confirmRestartButton" class="menu-action menu-action--danger" type="button">Restart</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>

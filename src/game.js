@@ -14,6 +14,9 @@ const pauseButtonText = document.querySelector("#pauseButtonText");
 const pauseOverlay = document.querySelector("#pauseOverlay");
 const resumeButton = document.querySelector("#resumeButton");
 const restartButton = document.querySelector("#restartButton");
+const restartConfirm = document.querySelector("#restartConfirm");
+const cancelRestartButton = document.querySelector("#cancelRestartButton");
+const confirmRestartButton = document.querySelector("#confirmRestartButton");
 const levelCompleteOverlay = document.querySelector("#levelCompleteOverlay");
 const levelCompleteTitleEl = document.querySelector("#levelCompleteTitle");
 const levelCompleteMissionEl = document.querySelector("#levelCompleteMission");
@@ -67,6 +70,9 @@ const state = {
   levelTransitionTimer: 0,
   levelComplete: false,
   awaitingUpgrade: false,
+  bossSpawned: false,
+  bossDefeated: false,
+  bossTriggerProgress: 0.85,
   time: 0,
   lastTime: performance.now(),
   scroll: 0,
@@ -133,28 +139,49 @@ const missionDeck = [
     target: "virions",
   },
   {
-    name: "Chemotaxis Run",
-    term: "Chemotaxis",
-    objective: "Follow the chemical trail and intercept fast-moving pathogens.",
-    target: "pathogens",
-  },
-  {
     name: "Influenza Bloom",
     term: "Viral replication",
     objective: "Stop influenza virions before touching pairs make more copies.",
     target: "influenza virions",
   },
+];
+
+const encounterMissionDeck = [
   {
-    name: "Phagocyte Cleanup",
-    term: "Phagocytosis",
-    objective: "Engulf weakened invaders and keep oxygen flow open.",
-    target: "invaders",
+    name: "Pox-Brick Breach",
+    term: "Poxvirus",
+    objective: "Fight through a high-threat vessel section, then strip the pox armor plates and expose the glowing weak core.",
+    target: "virions",
+    bossTarget: "pox boss",
+    encounter: "boss",
+    bossType: "poxBoss",
   },
   {
-    name: "Memory Response",
-    term: "Adaptive immunity",
-    objective: "Use learned antibody patterns to stop the next wave faster.",
+    name: "Adenovirus Prism",
+    term: "Adenovirus",
+    objective: "Clear the viral surge, then time antibody shots for the exposed prism face between shield rotations.",
     target: "virions",
+    bossTarget: "adenovirus mini-boss",
+    encounter: "mini-boss",
+    bossType: "adenovirusMini",
+  },
+  {
+    name: "Filovirus Ribbon",
+    term: "Filovirus",
+    objective: "Push through the bloodstream lanes, then dodge sweeping filament arcs and focus fire on the ribbon body.",
+    target: "virions",
+    bossTarget: "filovirus boss",
+    encounter: "boss",
+    bossType: "filovirusBoss",
+  },
+  {
+    name: "Adenovirus Prism",
+    term: "Adenovirus",
+    objective: "Survive the late-vessel pressure, then crack the rotating prism shield.",
+    target: "virions",
+    bossTarget: "adenovirus mini-boss",
+    encounter: "mini-boss",
+    bossType: "adenovirusMini",
   },
 ];
 
@@ -230,6 +257,15 @@ const spriteAtlas = loadGameImage(
 const influenzaSpriteSheet = loadGameImage(
   "./assets/sprites/processed/influenza-virion-spritesheet.png",
 );
+const poxBossSpriteSheet = loadGameImage(
+  "./assets/sprites/processed/pox-brick-boss-spritesheet.png",
+);
+const adenovirusSpriteSheet = loadGameImage(
+  "./assets/sprites/processed/adenovirus-prism-spritesheet.png",
+);
+const filovirusSpriteSheet = loadGameImage(
+  "./assets/sprites/processed/filovirus-ribbon-spritesheet.png",
+);
 
 const spriteFrames = {
   whiteCell: [
@@ -258,6 +294,24 @@ const spriteFrames = {
     { x: 1154, y: 173, w: 386, h: 407 },
     { x: 1653, y: 180, w: 395, h: 395 },
   ],
+  poxBoss: [
+    { x: 55, y: 176, w: 476, h: 339 },
+    { x: 548, y: 176, w: 520, h: 356 },
+    { x: 1101, y: 186, w: 513, h: 336 },
+    { x: 1631, y: 143, w: 495, h: 409 },
+  ],
+  adenovirusMini: [
+    { x: 117, y: 140, w: 408, h: 433 },
+    { x: 604, y: 139, w: 482, h: 437 },
+    { x: 1086, y: 134, w: 543, h: 452 },
+    { x: 1629, y: 111, w: 427, h: 483 },
+  ],
+  filovirusBoss: [
+    { x: 53, y: 246, w: 490, h: 238 },
+    { x: 543, y: 150, w: 510, h: 421 },
+    { x: 1103, y: 203, w: 526, h: 343 },
+    { x: 1629, y: 218, w: 490, h: 285 },
+  ],
   redCell: [
     { x: 94, y: 674, w: 174, h: 132 },
     { x: 357, y: 693, w: 185, h: 101 },
@@ -275,6 +329,48 @@ const spriteFrames = {
     { x: 1125, y: 893, w: 139, h: 61 },
     { x: 1316, y: 892, w: 143, h: 62 },
   ],
+};
+
+const bossProfiles = {
+  poxBoss: {
+    displayName: "Pox-Brick Boss",
+    spriteGroup: "poxBoss",
+    radius: 86,
+    hp: 34,
+    score: 650,
+    color: "#d262e8",
+    core: "#ff4f9a",
+    damage: 26,
+    targetXRatio: 0.73,
+    attackInterval: 2.45,
+    shadowBlur: 34,
+  },
+  adenovirusMini: {
+    displayName: "Adenovirus Prism",
+    spriteGroup: "adenovirusMini",
+    radius: 58,
+    hp: 18,
+    score: 360,
+    color: "#b566ff",
+    core: "#f8b9ff",
+    damage: 20,
+    targetXRatio: 0.68,
+    attackInterval: 2.1,
+    shadowBlur: 28,
+  },
+  filovirusBoss: {
+    displayName: "Filovirus Ribbon",
+    spriteGroup: "filovirusBoss",
+    radius: 74,
+    hp: 38,
+    score: 720,
+    color: "#4af7d5",
+    core: "#8bff5d",
+    damage: 24,
+    targetXRatio: 0.64,
+    attackInterval: 2.7,
+    shadowBlur: 30,
+  },
 };
 
 function loadGameImage(src) {
@@ -312,6 +408,14 @@ function lerpAngle(a, b, t) {
 
 function randomFrameIndex(group) {
   return Math.floor(rand(0, spriteFrames[group].length));
+}
+
+function getSpriteAsset(spriteGroup) {
+  if (spriteGroup === "influenzaVirus") return influenzaSpriteSheet;
+  if (spriteGroup === "poxBoss") return poxBossSpriteSheet;
+  if (spriteGroup === "adenovirusMini") return adenovirusSpriteSheet;
+  if (spriteGroup === "filovirusBoss") return filovirusSpriteSheet;
+  return spriteAtlas;
 }
 
 function ensureAudio() {
@@ -530,26 +634,78 @@ function clampToVessel(x, y, radius) {
 }
 
 function getMission(level) {
-  return missionDeck[(level - 1) % missionDeck.length];
+  if (level <= missionDeck.length) {
+    return missionDeck[level - 1];
+  }
+
+  return encounterMissionDeck[(level - missionDeck.length - 1) % encounterMissionDeck.length];
+}
+
+function isBossMission(mission = state.currentMission) {
+  return Boolean(mission?.bossType);
+}
+
+function isBossVirus(virus) {
+  return Boolean(virus?.isBoss);
+}
+
+function getDistanceProgress() {
+  return clamp((state.scroll - state.levelStartScroll) / state.levelLength, 0, 1);
+}
+
+function getLevelDifficultyMultiplier(level = state.level) {
+  if (level <= 5) return 1;
+  return Math.pow(1.18, level - 5);
 }
 
 function getLevelConfig(level) {
   const mission = getMission(level);
+  const encounterLevel = isBossMission(mission);
+  const difficulty = getLevelDifficultyMultiplier(level);
+  const baseLength = 2200 + level * (encounterLevel ? 560 : 520);
+  const baseKills = 3 + level * 2;
+  const baseSpawnScale = encounterLevel
+    ? Math.max(0.42, 0.86 - level * 0.035)
+    : Math.max(0.58, 1 - level * 0.055);
+
   return {
-    length: 2200 + level * 520,
-    kills: 3 + level * 2,
-    spawnScale: Math.max(0.58, 1 - level * 0.055),
+    length: Math.round(baseLength * (1 + Math.max(0, difficulty - 1) * 0.18)),
+    kills: Math.min(85, Math.ceil(baseKills * difficulty)),
+    spawnScale: Math.max(0.28, baseSpawnScale / Math.sqrt(difficulty)),
     mission,
   };
 }
 
+function getActiveBoss() {
+  return state.viruses.find((virus) => isBossVirus(virus) && !virus.dead && virus.hp > 0) || null;
+}
+
 function getLevelProgress() {
-  const distanceProgress = clamp(
-    (state.scroll - state.levelStartScroll) / state.levelLength,
-    0,
-    1,
-  );
+  const boss = isBossMission() ? getActiveBoss() : null;
+  const distanceProgress = getDistanceProgress();
   const killProgress = clamp(state.levelKills / state.levelGoal, 0, 1);
+  if (isBossMission()) {
+    if (state.bossDefeated) {
+      return {
+        distance: 1,
+        kills: 1,
+        combined: 1,
+        complete: true,
+      };
+    }
+
+    const triggerProgress = state.bossTriggerProgress || 0.86;
+    const approachProgress = clamp(distanceProgress / triggerProgress, 0, 1) * 0.82;
+    const bossProgress = boss ? 1 - clamp(boss.hp / boss.maxHp, 0, 1) : 0;
+    const combined = boss ? 0.82 + bossProgress * 0.18 : approachProgress;
+    return {
+      distance: combined,
+      kills: killProgress,
+      combined,
+      complete: false,
+    };
+  }
+
   return {
     distance: distanceProgress,
     kills: killProgress,
@@ -574,6 +730,9 @@ function configureLevel(level) {
   state.levelKills = 0;
   state.levelTransitionTimer = 0;
   state.influenzaNoticeTimer = 0;
+  state.bossSpawned = false;
+  state.bossDefeated = false;
+  state.bossTriggerProgress = isBossMission(config.mission) ? rand(0.8, 0.9) : 0.85;
   state.nextVirus = 1.05;
   state.nextPlatelet = 4.4;
   showLevelBanner(`${config.mission.name}: ${config.mission.term}`, 2.35);
@@ -659,7 +818,9 @@ function openLevelCompleteScreen() {
   levelCompleteTitleEl.textContent = `Level ${state.level} Complete`;
   levelCompleteMissionEl.textContent = `${mission.name}: ${mission.term}`;
   levelCompleteScoreEl.textContent = `Score ${state.score}`;
-  levelCompleteKillsEl.textContent = `${state.levelKills} ${mission.target} neutralized`;
+  levelCompleteKillsEl.textContent = isBossMission(mission)
+    ? `${mission.bossTarget || mission.encounter} neutralized after ${state.levelKills} ${mission.target}`
+    : `${state.levelKills} ${mission.target} neutralized`;
   levelCompleteHealthEl.textContent = `Health ${health}%`;
   nextMissionPreviewEl.textContent = `Next section: ${nextMission.name} (${nextMission.term})`;
   levelCompleteOverlay.hidden = false;
@@ -730,6 +891,8 @@ function setPaused(paused) {
   if (paused) {
     pointer.down = false;
     keys.clear();
+  } else {
+    setRestartConfirmOpen(false);
   }
   state.lastTime = performance.now();
   syncPauseUi();
@@ -745,6 +908,23 @@ function togglePaused() {
   setPaused(!state.paused);
 }
 
+function setRestartConfirmOpen(open) {
+  restartConfirm.hidden = !open;
+  restartButton.setAttribute("aria-expanded", String(open));
+  if (open) {
+    cancelRestartButton.focus();
+  }
+}
+
+function requestRestartRun() {
+  setRestartConfirmOpen(true);
+}
+
+function confirmRestartRun() {
+  setRestartConfirmOpen(false);
+  resetGame();
+}
+
 function resetGame() {
   state.running = true;
   state.ended = false;
@@ -758,6 +938,9 @@ function resetGame() {
   state.currentMission = getMission(1);
   state.levelTransitionTimer = 0;
   state.influenzaNoticeTimer = 0;
+  state.bossSpawned = false;
+  state.bossDefeated = false;
+  state.bossTriggerProgress = 0.85;
   state.time = 0;
   state.scroll = 0;
   state.nextVirus = 1.25;
@@ -805,6 +988,7 @@ function resetGame() {
   runSummaryEl.hidden = true;
   runSummaryEl.textContent = "";
   startButton.textContent = "Start Run";
+  setRestartConfirmOpen(false);
   configureLevel(1);
   overlay.hidden = true;
   levelCompleteOverlay.hidden = true;
@@ -819,11 +1003,18 @@ function updateHud() {
   const health = state.player ? state.player.health : 100;
   const mission = state.currentMission || getMission(state.level);
   const virusesLeft = Math.max(0, state.levelGoal - state.levelKills);
+  const boss = isBossMission(mission) ? getActiveBoss() : null;
   healthBar.style.transform = `scaleX(${clamp(health / 100, 0, 1)})`;
   levelProgressEl.style.transform = `scaleX(${getLevelProgress().combined})`;
   missionNameEl.textContent = mission.name;
   objectiveTextEl.textContent = mission.objective;
-  virusesLeftEl.textContent = `${virusesLeft} ${mission.target} left`;
+  if (boss) {
+    virusesLeftEl.textContent = `${Math.ceil(boss.hp)} integrity left`;
+  } else if (isBossMission(mission) && !state.bossDefeated) {
+    virusesLeftEl.textContent = `${virusesLeft} ${mission.target} left`;
+  } else {
+    virusesLeftEl.textContent = `${virusesLeft} ${mission.target} left`;
+  }
 
   const dashUnlocked = state.upgrades.dash > 0;
   const pulseUnlocked = state.upgrades.pulse > 0;
@@ -864,13 +1055,14 @@ function spawnRedCell(depth = rand(0.42, 1.12), x = state.width + rand(20, 180))
 }
 
 function spawnVirus(typeOverride = null, options = {}) {
-  const levelBoost = Math.min(8, state.level - 1);
+  const difficulty = getLevelDifficultyMultiplier();
+  const levelBoost = Math.min(12, state.level - 1) * (1 + Math.max(0, difficulty - 1) * 0.45);
   const roll = Math.random();
   const mission = state.currentMission || getMission(state.level);
-  const isInfluenzaBloom = state.level >= 5 && mission.name === "Influenza Bloom";
+  const isInfluenzaBloom = state.level >= 4 && mission.name === "Influenza Bloom";
   let type = typeOverride || "basic";
   if (!typeOverride) {
-    if (state.level >= 5 && (isInfluenzaBloom ? roll > 0.28 : roll > 0.84)) {
+    if (state.level >= 4 && (isInfluenzaBloom ? roll > 0.28 : roll > 0.84)) {
       type = "influenza";
     } else if (roll > 0.88 && state.level > 3) {
       type = "budding";
@@ -935,7 +1127,15 @@ function spawnVirus(typeOverride = null, options = {}) {
       spikes: 14,
     },
   };
-  const stats = statsByType[type];
+  const stats = { ...statsByType[type] };
+  if (difficulty > 1) {
+    const hpBonusScale =
+      type === "fast" ? 1.2 : type === "tank" ? 2.8 : type === "influenza" ? 2.2 : 1.9;
+    const hpBonus = Math.floor(Math.max(0, difficulty - 1) * hpBonusScale);
+    stats.hp += hpBonus;
+    stats.speed *= 1 + Math.max(0, difficulty - 1) * 0.22;
+    stats.score += hpBonus * 12;
+  }
 
   const x = options.x ?? state.width + stats.radius + rand(15, 110);
   const spriteGroup =
@@ -1018,6 +1218,144 @@ function spawnPlatelet() {
   });
 }
 
+function spawnBoss(type) {
+  const profile = bossProfiles[type];
+  if (!profile) return null;
+
+  const difficulty = getLevelDifficultyMultiplier();
+  const radius = profile.radius;
+  const x = state.width + radius + 150;
+  const y = clampToVessel(x, state.height * 0.5, radius);
+  const bossHp = Math.ceil(profile.hp * (1 + Math.max(0, difficulty - 1) * 0.68));
+  const boss = {
+    type,
+    isBoss: true,
+    displayName: profile.displayName,
+    spriteGroup: profile.spriteGroup,
+    frameIndex: 0,
+    x,
+    y,
+    baseY: y,
+    targetXRatio: profile.targetXRatio,
+    radius,
+    hp: bossHp,
+    maxHp: bossHp,
+    speed: 0,
+    color: profile.color,
+    core: profile.core,
+    score: Math.round(profile.score * difficulty),
+    damage: profile.damage,
+    spikes: 0,
+    wobble: rand(0, TAU),
+    wobbleSpeed: rand(0.75, 1.25),
+    hit: 0,
+    angle: 0,
+    spin: type === "adenovirusMini" ? rand(-0.42, 0.42) : 0,
+    attackTimer: (profile.attackInterval * 0.75) / Math.sqrt(difficulty),
+    phase: 0,
+    shieldCycle: rand(0, 1.2),
+    shieldOpen: false,
+  };
+  state.viruses.push(boss);
+  showLevelBanner(`${profile.displayName}: ${state.currentMission?.term || "Boss"}`, 2.25);
+  return boss;
+}
+
+function spawnBossAdd(boss, type, angle, speed = rand(90, 130)) {
+  const difficulty = getLevelDifficultyMultiplier();
+  const x = boss.x - boss.radius * 0.55;
+  const y = clampToVessel(x, boss.y + Math.sin(angle) * boss.radius * 0.95, 24);
+  const add = spawnVirus(type, {
+    x,
+    y,
+    speed: speed * (1 + Math.max(0, difficulty - 1) * 0.16),
+    replicateCooldown: rand(0.8, 1.25),
+    spreadVx: Math.cos(angle) * rand(24, 48),
+    spreadVy: Math.sin(angle) * rand(34, 58),
+    spreadTimer: rand(0.45, 0.75),
+  });
+  add.bossAdd = true;
+  return add;
+}
+
+function updatePoxBoss(boss, dt) {
+  const healthRatio = clamp(boss.hp / boss.maxHp, 0, 1);
+  const nextPhase = healthRatio > 0.72 ? 0 : healthRatio > 0.48 ? 1 : healthRatio > 0.22 ? 2 : 3;
+  if (nextPhase > boss.phase) {
+    boss.phase = nextPhase;
+    state.shake = Math.max(state.shake, 0.2 + nextPhase * 0.04);
+    addParticleBurst(boss.x, boss.y, boss.color, 18 + nextPhase * 4, 150);
+    spawnVirusFragment(boss, -1);
+    spawnVirusFragment(boss, 1);
+    showLevelBanner(nextPhase === 3 ? "Pox core exposed" : "Pox armor plates broke loose", 1.35);
+  }
+  boss.frameIndex = boss.phase;
+
+  boss.attackTimer -= dt;
+  if (boss.attackTimer <= 0) {
+    const difficulty = getLevelDifficultyMultiplier();
+    boss.attackTimer = (bossProfiles.poxBoss.attackInterval + rand(-0.25, 0.45)) / Math.sqrt(difficulty);
+    spawnBossAdd(boss, "budding", -0.8, rand(84, 112));
+    spawnBossAdd(boss, "budding", 0.8, rand(84, 112));
+    addParticleBurst(boss.x - boss.radius * 0.55, boss.y, "#ff7cca", 12, 110);
+  }
+}
+
+function updateAdenovirusMiniBoss(boss, dt) {
+  boss.shieldCycle = (boss.shieldCycle + dt) % 3.4;
+  boss.shieldOpen = boss.shieldCycle > 2.12 && boss.shieldCycle < 3.02;
+  boss.frameIndex = boss.shieldOpen ? 2 : boss.shieldCycle > 1.2 ? 1 : 0;
+
+  boss.attackTimer -= dt;
+  if (boss.attackTimer <= 0) {
+    const difficulty = getLevelDifficultyMultiplier();
+    boss.attackTimer =
+      (bossProfiles.adenovirusMini.attackInterval + rand(-0.2, 0.32)) / Math.sqrt(difficulty);
+    boss.frameIndex = 3;
+    for (let i = 0; i < 3; i += 1) {
+      spawnBossAdd(boss, "fast", rand(-1.0, 1.0), rand(125, 168));
+    }
+    addParticleBurst(boss.x, boss.y, "#c86cff", 10, 125);
+  }
+}
+
+function updateFilovirusBoss(boss, dt) {
+  boss.frameIndex = Math.floor(state.time * 1.35) % spriteFrames.filovirusBoss.length;
+  boss.attackTimer -= dt;
+  if (boss.attackTimer <= 0) {
+    const difficulty = getLevelDifficultyMultiplier();
+    boss.attackTimer =
+      (bossProfiles.filovirusBoss.attackInterval + rand(-0.25, 0.55)) / Math.sqrt(difficulty);
+    const lane = Math.sin(state.time * 1.7) > 0 ? 1 : -1;
+    spawnBossAdd(boss, "fast", lane * 0.7, rand(138, 178));
+    spawnBossAdd(boss, "tank", -lane * 0.55, rand(70, 92));
+    addParticleBurst(boss.x - boss.radius, boss.y, "#5ffff0", 14, 135);
+  }
+}
+
+function updateBossVirus(boss, dt) {
+  const profile = bossProfiles[boss.type];
+  if (!profile) return;
+
+  const targetX = state.width * profile.targetXRatio;
+  const centerY = state.height * 0.5;
+  const driftY =
+    boss.type === "poxBoss"
+      ? Math.sin(state.time * 0.85 + boss.wobble) * 78
+      : boss.type === "filovirusBoss"
+        ? Math.sin(state.time * 1.15 + boss.wobble) * 112
+        : Math.sin(state.time * 1.05 + boss.wobble) * 92;
+
+  boss.x = lerp(boss.x, targetX, clamp(dt * 1.25, 0, 0.08));
+  boss.y = clampToVessel(boss.x, centerY + driftY, boss.radius);
+  boss.angle += boss.spin * dt;
+  boss.hit = Math.max(0, boss.hit - dt);
+
+  if (boss.type === "poxBoss") updatePoxBoss(boss, dt);
+  if (boss.type === "adenovirusMini") updateAdenovirusMiniBoss(boss, dt);
+  if (boss.type === "filovirusBoss") updateFilovirusBoss(boss, dt);
+}
+
 function updateLevelTimers(dt) {
   if (state.levelBannerTimer > 0) {
     state.levelBannerTimer = Math.max(0, state.levelBannerTimer - dt);
@@ -1069,6 +1407,13 @@ function startNextLevel() {
 
 function updateLevelCompletion() {
   if (state.levelTransitionTimer > 0) return;
+  if (isBossMission()) {
+    if (state.bossDefeated) {
+      completeLevel();
+    }
+    return;
+  }
+
   if (getLevelProgress().complete) {
     completeLevel();
   }
@@ -1111,7 +1456,9 @@ function chooseLockTarget() {
     const laneMatch = 1 - clamp(Math.abs(dy) / verticalRange, 0, 1);
     const aheadBonus = dx > 0 ? 1 : 0.28;
     const typeBonus =
-      virus.type === "influenza"
+      isBossVirus(virus)
+        ? 1.65
+        : virus.type === "influenza"
         ? 1.1
         : virus.type === "fast"
           ? 0.45
@@ -1253,16 +1600,26 @@ function destroyVirus(virus, source = "shot") {
   virus.dead = true;
   virus.hp = 0;
   state.score += virus.score;
-  state.levelKills += 1;
+  if (isBossMission()) {
+    if (isBossVirus(virus)) {
+      state.bossDefeated = true;
+    } else {
+      state.levelKills = Math.min(state.levelGoal, state.levelKills + 1);
+    }
+  } else {
+    state.levelKills += 1;
+  }
   state.stats.virionsNeutralized += 1;
-  state.shake = Math.max(state.shake, source === "pulse" ? 0.34 : 0.18);
+  state.shake = Math.max(state.shake, isBossVirus(virus) ? 0.46 : source === "pulse" ? 0.34 : 0.18);
   playVirusPopSfx();
-  addParticleBurst(virus.x, virus.y, virus.color, virus.type === "tank" ? 26 : 18, 145);
+  addParticleBurst(virus.x, virus.y, virus.color, isBossVirus(virus) ? 44 : virus.type === "tank" ? 26 : 18, isBossVirus(virus) ? 220 : 145);
 
   if (virus.type === "budding") {
     spawnVirusFragment(virus, -1);
     spawnVirusFragment(virus, 1);
     showLevelBanner("Budding virion split into fragments", 1.25);
+  } else if (isBossVirus(virus)) {
+    showLevelBanner(`${virus.displayName || "Boss"} neutralized`, 1.45);
   }
 }
 
@@ -1350,7 +1707,10 @@ function update(dt) {
     updateHud();
     return;
   }
-  const worldSpeed = 92 + state.level * 8 + (state.levelTransitionTimer > 0 ? 42 : 0);
+  const difficulty = getLevelDifficultyMultiplier();
+  const worldSpeed =
+    (92 + state.level * 8 + (state.levelTransitionTimer > 0 ? 42 : 0)) *
+    (1 + Math.max(0, difficulty - 1) * 0.16);
   state.scroll += worldSpeed * dt;
 
   updateSpawns(dt);
@@ -1446,8 +1806,22 @@ function updateSpawns(dt) {
   state.nextRedCell -= dt;
   state.nextPlatelet -= dt;
   const levelConfig = getLevelConfig(state.level);
+  const mission = state.currentMission || levelConfig.mission;
+  const encounterActive = isBossMission(mission);
+  const bossTriggerReached =
+    encounterActive && getDistanceProgress() >= (state.bossTriggerProgress || 0.86);
 
-  if (state.nextVirus <= 0) {
+  if (bossTriggerReached && !state.bossSpawned) {
+    state.viruses = [];
+    state.shots = [];
+    state.lockTarget = null;
+    spawnBoss(mission.bossType);
+    state.bossSpawned = true;
+    state.nextVirus = 1.6;
+    state.nextPlatelet = 5.8;
+  }
+
+  if ((!encounterActive || !state.bossSpawned) && state.nextVirus <= 0) {
     spawnVirus();
     state.nextVirus = rand(0.78, 1.35) * levelConfig.spawnScale;
   }
@@ -1491,8 +1865,8 @@ function updateShots(dt) {
 }
 
 function getInfluenzaCap() {
-  if (state.level < 5) return 0;
-  return Math.min(30, 12 + Math.max(0, state.level - 5) * 3);
+  if (state.level < 4) return 0;
+  return Math.min(30, 12 + Math.max(0, state.level - 4) * 3);
 }
 
 function getLiveInfluenzaViruses() {
@@ -1624,16 +1998,20 @@ function separateInfluenzaViruses(dt) {
 function updateViruses(dt, worldSpeed) {
   for (const virus of state.viruses) {
     if (virus.dead) continue;
-    virus.x -= (virus.speed + worldSpeed * 0.45) * dt;
-    virus.y += Math.sin(state.time * virus.wobbleSpeed + virus.wobble) * 26 * dt;
-    if (virus.type === "influenza") {
-      virus.replicateCooldown = Math.max(0, (virus.replicateCooldown ?? 0) - dt);
-      updateInfluenzaSpread(virus, dt);
-      nudgeInfluenzaTowardNearest(virus, dt);
+    if (isBossVirus(virus)) {
+      updateBossVirus(virus, dt);
+    } else {
+      virus.x -= (virus.speed + worldSpeed * 0.45) * dt;
+      virus.y += Math.sin(state.time * virus.wobbleSpeed + virus.wobble) * 26 * dt;
+      if (virus.type === "influenza") {
+        virus.replicateCooldown = Math.max(0, (virus.replicateCooldown ?? 0) - dt);
+        updateInfluenzaSpread(virus, dt);
+        nudgeInfluenzaTowardNearest(virus, dt);
+      }
+      virus.y = clampToVessel(virus.x, virus.y, virus.radius);
+      virus.angle += virus.spin * dt;
+      virus.hit = Math.max(0, virus.hit - dt);
     }
-    virus.y = clampToVessel(virus.x, virus.y, virus.radius);
-    virus.angle += virus.spin * dt;
-    virus.hit = Math.max(0, virus.hit - dt);
   }
 
   state.viruses = state.viruses.filter(
@@ -1674,20 +2052,39 @@ function updateParticles(dt) {
   state.particles = state.particles.filter((particle) => particle.ttl < particle.life);
 }
 
+function getVirusCollisionRadius(virus) {
+  if (virus.type === "poxBoss") return virus.radius * 1.62;
+  if (virus.type === "filovirusBoss") return virus.radius * 1.9;
+  if (virus.type === "adenovirusMini") return virus.radius * 1.3;
+  return virus.radius;
+}
+
+function applyShotHit(virus, shot) {
+  if (virus.type === "adenovirusMini" && !virus.shieldOpen) {
+    virus.hit = 0.18;
+    shot.life = -1;
+    state.shake = Math.max(state.shake, 0.08);
+    addParticleBurst(shot.x, shot.y, "#9ff8ff", 8, 92);
+    return;
+  }
+
+  virus.hp -= shot.damage;
+  virus.hit = 0.12;
+  shot.life = -1;
+  addParticleBurst(shot.x, shot.y, palette.cyan, isBossVirus(virus) ? 14 : 9, 95);
+  if (virus.hp <= 0) {
+    destroyVirus(virus);
+  }
+}
+
 function checkCollisions() {
   const player = state.player;
 
   for (const shot of state.shots) {
     for (const virus of state.viruses) {
       if (virus.dead) continue;
-      if (distance(shot, virus) < (shot.hitRadius ?? shot.radius) + virus.radius) {
-        virus.hp -= shot.damage;
-        virus.hit = 0.12;
-        shot.life = -1;
-        addParticleBurst(shot.x, shot.y, palette.cyan, 9, 95);
-        if (virus.hp <= 0) {
-          destroyVirus(virus);
-        }
+      if (distance(shot, virus) < (shot.hitRadius ?? shot.radius) + getVirusCollisionRadius(virus)) {
+        applyShotHit(virus, shot);
         break;
       }
     }
@@ -1697,15 +2094,23 @@ function checkCollisions() {
 
   for (const virus of state.viruses) {
     if (virus.dead) continue;
-    if (distance(player, virus) < player.radius * 0.82 + virus.radius * 0.66) {
+    if (distance(player, virus) < player.radius * 0.82 + getVirusCollisionRadius(virus) * 0.66) {
       hurtPlayer(
-        virus.type === "tank" ? 22 : virus.type === "influenza" ? 16 : 14,
+        isBossVirus(virus)
+          ? virus.damage
+          : virus.type === "tank"
+            ? 22
+            : virus.type === "influenza"
+              ? 16
+              : 14,
         virus.x,
         virus.y,
         virus.color,
       );
-      virus.hp = 0;
-      virus.dead = true;
+      if (!isBossVirus(virus)) {
+        virus.hp = 0;
+        virus.dead = true;
+      }
     }
   }
 
@@ -2140,26 +2545,46 @@ function drawVirusTypeOverlay(virus) {
   ctx.restore();
 }
 
+function drawAdenovirusShield(virus) {
+  if (virus.type !== "adenovirusMini" || virus.shieldOpen) return;
+
+  ctx.save();
+  ctx.translate(virus.x, virus.y);
+  ctx.rotate(state.time * 0.8);
+  ctx.globalAlpha = 0.48 + Math.sin(state.time * 8) * 0.08;
+  ctx.strokeStyle = "rgba(135, 250, 255, 0.74)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([12, 10]);
+  ctx.beginPath();
+  ctx.arc(0, 0, virus.radius * 1.56, 0, TAU);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 function drawVirus(virus) {
   const frames = spriteFrames[virus.spriteGroup] || spriteFrames.greenVirus;
   const frame = frames[(virus.frameIndex ?? 0) % frames.length];
-  const spriteAsset = virus.spriteGroup === "influenzaVirus" ? influenzaSpriteSheet : spriteAtlas;
+  const spriteAsset = getSpriteAsset(virus.spriteGroup);
   const hitPulse = virus.hit > 0 ? 1 + Math.sin(state.time * 60) * 0.06 : 1;
-  if (virus.type !== "influenza") {
+  if (virus.type !== "influenza" && !isBossVirus(virus)) {
     drawVirusReadabilityHalo(virus);
   }
-  const spriteDrawn = drawImageFrame(spriteAsset, frame, virus.x, virus.y, virus.radius * 2.92, {
+  const targetHeight = isBossVirus(virus)
+    ? virus.radius * (virus.type === "filovirusBoss" ? 2.48 : 2.74)
+    : virus.radius * 2.92;
+  const spriteDrawn = drawImageFrame(spriteAsset, frame, virus.x, virus.y, targetHeight, {
     rotation: virus.angle,
     alpha: virus.hit > 0 ? 0.72 + Math.sin(state.time * 60) * 0.2 : 1,
     shadowColor: virus.color,
     shadowBlur:
-      virus.type === "influenza" || virus.type === "tank" || virus.type === "budding"
-        ? 18
-        : 11,
+      bossProfiles[virus.type]?.shadowBlur ??
+      (virus.type === "influenza" || virus.type === "tank" || virus.type === "budding" ? 18 : 11),
     pulse: hitPulse,
   });
   if (spriteDrawn) {
-    if (virus.type !== "influenza") {
+    drawAdenovirusShield(virus);
+    if (virus.type !== "influenza" && !isBossVirus(virus)) {
       drawVirusTypeOverlay(virus);
     }
     return;
@@ -2530,9 +2955,7 @@ window.addEventListener("keydown", (event) => {
 
   if (state.paused) {
     const target = event.target;
-    const isPauseControl =
-      target instanceof HTMLButtonElement &&
-      (target === pauseButton || pauseOverlay.contains(target));
+    const isPauseControl = target === pauseButton || pauseOverlay.contains(target);
     if (!isPauseControl) event.preventDefault();
     return;
   }
@@ -2602,7 +3025,9 @@ startButton.addEventListener("click", startRunFromUi);
 startButton.addEventListener("pointerdown", startRunFromUi);
 pauseButton.addEventListener("click", togglePaused);
 resumeButton.addEventListener("click", () => setPaused(false));
-restartButton.addEventListener("click", resetGame);
+restartButton.addEventListener("click", requestRestartRun);
+cancelRestartButton.addEventListener("click", () => setRestartConfirmOpen(false));
+confirmRestartButton.addEventListener("click", confirmRestartRun);
 showUpgradeButton.addEventListener("click", showUpgradeTree);
 for (const card of upgradeCards) {
   card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
