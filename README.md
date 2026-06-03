@@ -10,7 +10,7 @@ Play the current build at [humble-marvel-dx2j.here.now](https://humble-marvel-dx
 
 ## Mobile Web
 
-The here.now build is playable on phone browsers as a landscape-first web game. Open the live demo link, rotate the phone to landscape, then tap **Start Run** once so iOS/Safari and mobile Chrome can unlock music and sound effects.
+The here.now build is playable on phone browsers as a landscape-first web game. Open the live demo link, rotate the phone to landscape, then tap **Start Run** once so iOS/Safari and mobile Chrome can unlock music and sound effects. For the most full-screen iPhone view, use Safari's Share button and choose **Add to Home Screen**.
 
 Mobile controls:
 

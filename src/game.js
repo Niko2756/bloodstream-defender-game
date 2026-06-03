@@ -1,5 +1,6 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
+const gameShellEl = document.querySelector(".game-shell");
 const scoreEl = document.querySelector("#score");
 const levelEl = document.querySelector("#level");
 const healthBar = document.querySelector("#healthBar");
@@ -71,6 +72,7 @@ const mobileInput = {
   joystickY: 0,
   fire: false,
 };
+let lastTouchEndAt = 0;
 
 const audioManifest = {
   music: {
@@ -546,6 +548,41 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function getViewportSize() {
+  const visualViewport = window.visualViewport;
+  return {
+    width: visualViewport?.width || window.innerWidth,
+    height: visualViewport?.height || window.innerHeight,
+  };
+}
+
+function isTouchDevice() {
+  return navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
+}
+
+function syncViewportMetrics() {
+  const { width, height } = getViewportSize();
+  const touchDevice = isTouchDevice();
+  const landscape = width >= height;
+
+  document.documentElement.style.setProperty("--app-width", `${width}px`);
+  document.documentElement.style.setProperty("--app-height", `${height}px`);
+  document.documentElement.classList.toggle("is-touch-device", touchDevice);
+  document.documentElement.classList.toggle("is-landscape", touchDevice && landscape);
+  document.documentElement.classList.toggle("is-portrait", touchDevice && !landscape);
+  document.documentElement.classList.toggle("is-short-landscape", touchDevice && landscape && height <= 430);
+}
+
+async function requestMobileFullscreen() {
+  if (!isTouchDevice() || document.fullscreenElement || !gameShellEl?.requestFullscreen) return;
+
+  try {
+    await gameShellEl.requestFullscreen({ navigationUI: "hide" });
+  } catch (error) {
+    // iOS Safari/Chrome do not expose element fullscreen for normal web pages.
+  }
+}
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
@@ -1017,6 +1054,7 @@ function distance(a, b) {
 }
 
 function resize() {
+  syncViewportMetrics();
   const rect = canvas.getBoundingClientRect();
   state.width = Math.max(320, rect.width);
   state.height = Math.max(320, rect.height);
@@ -3673,8 +3711,30 @@ function updatePointer(event) {
 }
 
 window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => window.setTimeout(resize, 80));
+window.visualViewport?.addEventListener("resize", resize);
+window.visualViewport?.addEventListener("scroll", resize);
 window.addEventListener("pointerdown", unlockMenuAudio, { capture: true });
 window.addEventListener("touchstart", unlockMenuAudio, { capture: true, passive: true });
+document.addEventListener(
+  "touchmove",
+  (event) => {
+    if (event.scale && event.scale !== 1) event.preventDefault();
+  },
+  { passive: false },
+);
+document.addEventListener(
+  "touchend",
+  (event) => {
+    const now = Date.now();
+    if (now - lastTouchEndAt < 350) event.preventDefault();
+    lastTouchEndAt = now;
+  },
+  { passive: false },
+);
+for (const gestureEvent of ["gesturestart", "gesturechange", "gestureend"]) {
+  document.addEventListener(gestureEvent, (event) => event.preventDefault(), { passive: false });
+}
 
 window.addEventListener("keydown", (event) => {
   unlockMenuAudio();
@@ -3773,6 +3833,7 @@ function startRunFromUi(event) {
   event?.preventDefault();
   event?.stopPropagation();
   ensureAudio();
+  requestMobileFullscreen();
 
   const now = performance.now();
   if (now - state.lastUiStart < 120) return;

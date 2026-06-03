@@ -10,6 +10,8 @@
   --hud-gold: #ffd76e;
   --hud-cranberry: #481129;
   --hud-shadow: rgba(10, 0, 8, 0.48);
+  --app-width: 100vw;
+  --app-height: 100dvh;
 }
 
 /* Final HUD layer: generated transparent ornaments plus compact readable panels. */
@@ -440,26 +442,32 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #160612;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
   color: var(--text);
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 button {
   font: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .game-shell {
   position: relative;
-  width: 100vw;
-  height: 100dvh;
+  width: var(--app-width, 100vw);
+  height: var(--app-height, 100dvh);
   min-height: 420px;
   overflow: hidden;
   background: #160612;
+  touch-action: none;
 }
 
 #game {
@@ -468,6 +476,7 @@ button {
   height: 100%;
   touch-action: none;
   cursor: crosshair;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .hud {
@@ -3541,4 +3550,229 @@ button {
   .mobile-controls {
     display: none !important;
   }
+}
+
+html.is-touch-device,
+html.is-touch-device body {
+  width: var(--app-width, 100vw);
+  height: var(--app-height, 100dvh);
+}
+
+html.is-touch-device body {
+  position: fixed;
+  inset: 0;
+}
+
+html.is-touch-device .touch-start-note {
+  display: block;
+}
+
+html.is-touch-device.is-landscape .game-shell {
+  min-height: 0;
+}
+
+html.is-touch-device.is-landscape .mobile-controls:not([hidden]) {
+  display: block;
+}
+
+html.is-touch-device.is-landscape .hud {
+  grid-template-columns: 124px minmax(210px, 330px) auto;
+  gap: 6px;
+  inset: max(8px, env(safe-area-inset-top)) max(9px, env(safe-area-inset-right)) auto
+    max(9px, env(safe-area-inset-left));
+}
+
+html.is-touch-device.is-landscape .hud__stat--score {
+  width: 124px;
+  height: 52px;
+}
+
+html.is-touch-device.is-landscape .hud__stat--score strong {
+  left: 58px;
+  right: 16px;
+  bottom: 10px;
+  font-size: 16px;
+}
+
+html.is-touch-device.is-landscape .health {
+  width: min(330px, 100%);
+  height: 52px;
+}
+
+html.is-touch-device.is-landscape .hud__controls {
+  grid-template-columns: 48px 58px;
+  gap: 4px;
+}
+
+html.is-touch-device.is-landscape .pause-button {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  background:
+    url("./assets/ui/hud-pause-medallion.png") center / 48px 48px no-repeat,
+    transparent;
+}
+
+html.is-touch-device.is-landscape .pause-button::after,
+html.is-touch-device.is-landscape .pause-button__label {
+  display: none;
+}
+
+html.is-touch-device.is-landscape .hud__stat--level {
+  width: 58px;
+  height: 54px;
+}
+
+html.is-touch-device.is-landscape .hud__stat--level strong {
+  top: 30px;
+  font-size: 15px;
+}
+
+html.is-touch-device.is-landscape .mission-panel {
+  top: calc(max(8px, env(safe-area-inset-top)) + 54px);
+  bottom: auto;
+  width: min(340px, 42vw);
+  min-height: 104px;
+  padding: 38px 22px 16px 60px;
+}
+
+html.is-touch-device.is-landscape .mission-panel strong {
+  font-size: 14px;
+}
+
+html.is-touch-device.is-landscape .mission-panel p {
+  max-width: 250px;
+  font-size: 10px;
+  -webkit-line-clamp: 2;
+}
+
+html.is-touch-device.is-landscape .mission-panel__meta span {
+  min-height: 19px;
+  font-size: 8px;
+}
+
+html.is-touch-device.is-landscape #abilityDash {
+  width: 106px;
+  padding-left: 44px;
+}
+
+html.is-touch-device.is-landscape #abilityPulse {
+  width: 132px;
+  padding-left: 68px;
+}
+
+html.is-touch-device.is-landscape .level-meter {
+  left: calc(max(150px, env(safe-area-inset-left)) + 6px);
+  right: calc(max(150px, env(safe-area-inset-right)) + 6px);
+  bottom: max(4px, env(safe-area-inset-bottom));
+  height: 22px;
+  opacity: 0.8;
+}
+
+html.is-touch-device.is-landscape .level-banner {
+  top: 58px;
+}
+
+html.is-touch-device.is-landscape .overlay {
+  padding: 16px;
+}
+
+html.is-touch-device.is-landscape .overlay h1 {
+  font-size: clamp(32px, 7vw, 58px);
+}
+
+html.is-touch-device.is-landscape .level-complete-panel,
+html.is-touch-device.is-landscape .pause-panel {
+  width: min(420px, calc(100vw - 44px));
+  padding: 20px;
+}
+
+html.is-touch-device.is-landscape .level-complete-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+html.is-touch-device.is-landscape .upgrade-panel {
+  width: min(1120px, calc(100vw - 24px));
+  max-height: calc(var(--app-height, 100dvh) - 18px);
+  overflow: auto;
+  padding-top: 18px;
+}
+
+html.is-touch-device.is-landscape .upgrade-plaque {
+  width: min(700px, 72vw);
+}
+
+html.is-touch-device.is-landscape .upgrade-tree {
+  gap: clamp(10px, 2vw, 22px);
+  margin-top: -8px;
+}
+
+html.is-touch-device.is-landscape .upgrade-node {
+  min-height: 230px;
+  padding: 58px 20px 18px;
+}
+
+html.is-touch-device.is-landscape .upgrade-node__title {
+  font-size: clamp(18px, 2.2vw, 24px);
+}
+
+html.is-touch-device.is-short-landscape .mobile-joystick {
+  width: 98px;
+  height: 98px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+html.is-touch-device.is-short-landscape .mobile-joystick__knob {
+  width: 42px;
+  height: 42px;
+}
+
+html.is-touch-device.is-short-landscape .mobile-actions {
+  grid-template-columns: 58px 66px;
+  gap: 7px;
+  bottom: max(10px, env(safe-area-inset-bottom));
+}
+
+html.is-touch-device.is-short-landscape .mobile-action--fire {
+  width: 70px;
+  height: 70px;
+  font-size: 14px;
+}
+
+html.is-touch-device.is-short-landscape .mobile-action--dash,
+html.is-touch-device.is-short-landscape .mobile-action--pulse {
+  width: 58px;
+  height: 42px;
+  font-size: 9px;
+}
+
+html.is-touch-device.is-short-landscape .mobile-action small {
+  font-size: 7px;
+}
+
+html.is-touch-device.is-short-landscape .mission-panel {
+  width: min(310px, 38vw);
+  min-height: 92px;
+  padding: 34px 18px 14px 56px;
+  transform: scale(0.78);
+  transform-origin: top left;
+}
+
+html.is-touch-device.is-short-landscape .mission-panel p {
+  display: none;
+}
+
+html.is-touch-device.is-short-landscape .level-meter {
+  left: calc(max(122px, env(safe-area-inset-left)) + 4px);
+  right: calc(max(122px, env(safe-area-inset-right)) + 4px);
+  height: 18px;
+}
+
+html.is-touch-device.is-portrait .orientation-prompt {
+  display: grid;
+}
+
+html.is-touch-device.is-portrait .mobile-controls {
+  display: none !important;
 }
