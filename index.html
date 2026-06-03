@@ -58,6 +58,44 @@
         <button id="startButton" class="primary-action" type="button">Start Run</button>
       </section>
 
+      <section id="gameOverOverlay" class="overlay game-over-overlay" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle" hidden>
+        <div class="game-over-frame">
+          <img class="game-over-art" src="./assets/ui/game-over-summary-panel.png" alt="" draggable="false" />
+          <div class="game-over-title">
+            <span class="overlay-eyebrow">Immune Response Report</span>
+            <h1 id="gameOverTitle">Immune Run Complete</h1>
+            <p id="gameOverSubtitle">Your leukocyte held the bloodstream as long as it could.</p>
+          </div>
+          <dl class="game-over-stats" aria-label="Run statistics">
+            <div class="game-over-stat game-over-stat--score">
+              <dt>Final Score</dt>
+              <dd id="gameOverScore">0</dd>
+            </div>
+            <div class="game-over-stat game-over-stat--level">
+              <dt>Level Reached</dt>
+              <dd id="gameOverLevel">1</dd>
+            </div>
+            <div class="game-over-stat game-over-stat--sections">
+              <dt>Sections Cleared</dt>
+              <dd id="gameOverSections">0</dd>
+            </div>
+            <div class="game-over-stat game-over-stat--virions">
+              <dt>Virions Neutralized</dt>
+              <dd id="gameOverVirions">0</dd>
+            </div>
+          </dl>
+          <div class="game-over-details" aria-label="Run summary details">
+            <p><span>Survival Time</span><strong id="gameOverTime">0:00</strong></p>
+            <p><span>Bosses Neutralized</span><strong id="gameOverBosses">0</strong></p>
+            <div>
+              <span>Adaptations</span>
+              <ul id="gameOverAdaptations"></ul>
+            </div>
+          </div>
+          <button id="gameOverRestartButton" class="game-over-restart" type="button">Try Again</button>
+        </div>
+      </section>
+
       <section id="pauseOverlay" class="overlay pause-overlay" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" hidden>
         <div class="pause-panel">
           <h1 id="pauseTitle">Paused</h1>

@@ -22,6 +22,8 @@ Play the current build at [humble-marvel-dx2j.here.now](https://humble-marvel-dx
 
 ![Bloodstream Defender pause menu](docs/screenshots/pause-menu.png)
 
+![Bloodstream Defender immune run summary](docs/screenshots/game-over-summary.png)
+
 ## Play Locally
 
 This is a static HTML/CSS/JavaScript game. There is no build step and no package install.
@@ -45,7 +47,7 @@ http://localhost:8000/
 - Chemotaxis Dash: `Shift` after choosing the Chemotaxis Dash upgrade
 - Complement Pulse: `E` or `Q` after choosing the Complement Pulse upgrade
 - Pause/resume: `P`, `Escape`, or the pause button
-- Restart: use the pause menu or the end screen
+- Restart: use the pause menu, which asks for confirmation, or the end screen
 
 ## Upgrade Flow
 
@@ -57,26 +59,29 @@ The player then chooses one adaptation from a roguelite upgrade tree:
 - Complement Defense: unlocks and improves the `E`/`Q` complement pulse.
 - Cell Movement: unlocks and improves the `Shift` chemotaxis dash.
 
+Later sections add escalating pressure. Influenza virions arrive in level 4 and can multiply when matching virions touch, while boss and mini-boss encounters begin around the end of later vessel sections.
+
 ## Current Features
 
-- Level-based blood vessel sections with progress and virus-clear goals
+- Level-based blood vessel sections with progress goals, escalating difficulty, and late-stage boss encounters
 - Level-complete summary screens followed by a roguelite upgrade tree
 - Upgrade branches that explain both the immune-system idea and the controls: passive antibody firing, `E`/`Q` complement pulse, and `Shift` chemotaxis dash
 - Educational arcade missions that weave in immune terms like innate immunity, antigen, complement system, chemotaxis, phagocytosis, and adaptive immunity
 - Swim-like movement with inertia and quick left/right surge animation
 - Threat-based auto lock-on that prioritizes nearby incoming viruses without visible lock-on rings
 - Homing antibody projectiles shaped more like small Y-shaped antibodies
+- Influenza virions that multiply on contact and push outward to create urgent target-priority moments
 - Budding virions that can split into smaller fragments when neutralized
-- Generated white blood cell, virus, platelet, red blood cell, and antibody sprites
+- Generated white blood cell, virus, platelet, red blood cell, antibody, influenza, and boss sprites
 - Multi-layer generated blood-vessel backgrounds with parallax scrolling
 - Generated HUD ornament art for the mission panel, health bar, score, level display, pause button, ability status chips, and level progress bar
-- Pause menu, level-complete screen, and ImageGen-guided upgrade tree
+- Pause menu with restart confirmation, level-complete screen, ImageGen-guided upgrade tree, and immune-run summary screen
 - Procedural sound effects for shooting, movement surges, and virus pops
 
 ## Project Structure
 
 - `index.html` contains the game canvas and HUD markup.
-- `styles.css` controls the page, HUD, start overlay, pause menu, level-complete screen, and upgrade-tree styling.
+- `styles.css` controls the page, HUD, start overlay, pause menu, level-complete screen, upgrade tree, and game-over report styling.
 - `src/game.js` contains the game loop, movement, combat, spawning, drawing, audio, and state handling.
 - `assets/` contains generated concept art, sprites, and parallax background layers.
 - `docs/` contains art direction notes, asset pipeline notes, parallax notes, and README screenshots.

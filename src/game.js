@@ -9,6 +9,16 @@ const levelMeterEl = document.querySelector(".level-meter");
 const levelBannerEl = document.querySelector("#levelBanner");
 const overlay = document.querySelector("#startOverlay");
 const startButton = document.querySelector("#startButton");
+const gameOverOverlay = document.querySelector("#gameOverOverlay");
+const gameOverSubtitleEl = document.querySelector("#gameOverSubtitle");
+const gameOverScoreEl = document.querySelector("#gameOverScore");
+const gameOverLevelEl = document.querySelector("#gameOverLevel");
+const gameOverSectionsEl = document.querySelector("#gameOverSections");
+const gameOverVirionsEl = document.querySelector("#gameOverVirions");
+const gameOverTimeEl = document.querySelector("#gameOverTime");
+const gameOverBossesEl = document.querySelector("#gameOverBosses");
+const gameOverAdaptationsEl = document.querySelector("#gameOverAdaptations");
+const gameOverRestartButton = document.querySelector("#gameOverRestartButton");
 const pauseButton = document.querySelector("#pauseButton");
 const pauseButtonText = document.querySelector("#pauseButtonText");
 const pauseOverlay = document.querySelector("#pauseOverlay");
@@ -96,6 +106,8 @@ const state = {
   stats: {
     virionsNeutralized: 0,
     sectionsCleared: 0,
+    bossesNeutralized: 0,
+    damageTaken: 0,
     upgradesTaken: [],
   },
   dashCooldown: 0,
@@ -925,6 +937,35 @@ function confirmRestartRun() {
   resetGame();
 }
 
+function formatRunTime(seconds) {
+  const wholeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(wholeSeconds / 60);
+  const remainingSeconds = wholeSeconds % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
+function renderGameOverSummary() {
+  const mission = state.currentMission || getMission(state.level);
+  gameOverSubtitleEl.textContent = `Run ended during ${mission.name}: ${mission.term}.`;
+  gameOverScoreEl.textContent = state.score.toLocaleString("en-US");
+  gameOverLevelEl.textContent = String(state.level);
+  gameOverSectionsEl.textContent = String(state.stats.sectionsCleared);
+  gameOverVirionsEl.textContent = state.stats.virionsNeutralized.toLocaleString("en-US");
+  gameOverTimeEl.textContent = formatRunTime(state.time);
+  gameOverBossesEl.textContent = String(state.stats.bossesNeutralized);
+
+  gameOverAdaptationsEl.replaceChildren();
+  const upgrades =
+    state.stats.upgradesTaken.length > 0
+      ? state.stats.upgradesTaken.slice(-5)
+      : ["No adaptations selected"];
+  for (const upgrade of upgrades) {
+    const item = document.createElement("li");
+    item.textContent = upgrade;
+    gameOverAdaptationsEl.append(item);
+  }
+}
+
 function resetGame() {
   state.running = true;
   state.ended = false;
@@ -977,6 +1018,8 @@ function resetGame() {
   state.stats = {
     virionsNeutralized: 0,
     sectionsCleared: 0,
+    bossesNeutralized: 0,
+    damageTaken: 0,
     upgradesTaken: [],
   };
   state.dashCooldown = 0;
@@ -991,6 +1034,7 @@ function resetGame() {
   setRestartConfirmOpen(false);
   configureLevel(1);
   overlay.hidden = true;
+  gameOverOverlay.hidden = true;
   levelCompleteOverlay.hidden = true;
   upgradeOverlay.hidden = true;
   syncPauseUi();
@@ -1603,6 +1647,7 @@ function destroyVirus(virus, source = "shot") {
   if (isBossMission()) {
     if (isBossVirus(virus)) {
       state.bossDefeated = true;
+      state.stats.bossesNeutralized += 1;
     } else {
       state.levelKills = Math.min(state.levelGoal, state.levelKills + 1);
     }
@@ -2141,7 +2186,9 @@ function hurtPlayer(amount, x, y, color, soft = false) {
   if (player.invulnerable > 0 && !soft) return;
   if (soft && player.hurtTimer > 0) return;
 
+  const previousHealth = player.health;
   player.health = Math.max(0, player.health - amount);
+  state.stats.damageTaken += previousHealth - player.health;
   player.hurtTimer = soft ? 0.35 : 0.7;
   player.invulnerable = soft ? player.invulnerable : 0.55;
   addParticleBurst(x, y, color, soft ? 4 : 16, soft ? 55 : 150);
@@ -2157,19 +2204,14 @@ function endGame() {
   state.paused = false;
   state.awaitingUpgrade = false;
   state.levelComplete = false;
-  overlay.hidden = false;
+  overlay.hidden = true;
+  gameOverOverlay.hidden = false;
   pauseOverlay.hidden = true;
   levelCompleteOverlay.hidden = true;
   upgradeOverlay.hidden = true;
-  overlay.querySelector("h1").textContent = "Immune Run Complete";
-  const upgradeList =
-    state.stats.upgradesTaken.length > 0
-      ? state.stats.upgradesTaken.join(", ")
-      : "No adaptations selected yet";
-  runSummaryEl.innerHTML = `Score ${state.score} | Sections cleared ${state.stats.sectionsCleared} | Virions neutralized ${state.stats.virionsNeutralized}<br>Adaptations: ${upgradeList}`;
-  runSummaryEl.hidden = false;
-  startButton.textContent = "Try Again";
+  renderGameOverSummary();
   syncPauseUi();
+  gameOverRestartButton.focus();
 }
 
 function draw() {
@@ -3023,6 +3065,7 @@ function startRunFromUi(event) {
 
 startButton.addEventListener("click", startRunFromUi);
 startButton.addEventListener("pointerdown", startRunFromUi);
+gameOverRestartButton.addEventListener("click", startRunFromUi);
 pauseButton.addEventListener("click", togglePaused);
 resumeButton.addEventListener("click", () => setPaused(false));
 restartButton.addEventListener("click", requestRestartRun);
