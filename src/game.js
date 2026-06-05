@@ -11,6 +11,7 @@ const levelBannerEl = document.querySelector("#levelBanner");
 const overlay = document.querySelector("#startOverlay");
 const startButton = document.querySelector("#startButton");
 const gameOverOverlay = document.querySelector("#gameOverOverlay");
+const gameOverFrameEl = document.querySelector(".game-over-frame");
 const gameOverSubtitleEl = document.querySelector("#gameOverSubtitle");
 const gameOverScoreEl = document.querySelector("#gameOverScore");
 const gameOverLevelEl = document.querySelector("#gameOverLevel");
@@ -24,11 +25,14 @@ const pauseButton = document.querySelector("#pauseButton");
 const pauseButtonText = document.querySelector("#pauseButtonText");
 const pauseOverlay = document.querySelector("#pauseOverlay");
 const resumeButton = document.querySelector("#resumeButton");
+const musicMuteButton = document.querySelector("#musicMuteButton");
+const sfxMuteButton = document.querySelector("#sfxMuteButton");
 const restartButton = document.querySelector("#restartButton");
 const restartConfirm = document.querySelector("#restartConfirm");
 const cancelRestartButton = document.querySelector("#cancelRestartButton");
 const confirmRestartButton = document.querySelector("#confirmRestartButton");
 const levelCompleteOverlay = document.querySelector("#levelCompleteOverlay");
+const levelCompletePanelEl = document.querySelector(".level-complete-panel");
 const levelCompleteTitleEl = document.querySelector("#levelCompleteTitle");
 const levelCompleteMissionEl = document.querySelector("#levelCompleteMission");
 const levelCompleteScoreEl = document.querySelector("#levelCompleteScore");
@@ -59,6 +63,10 @@ const mobilePulseHint = document.querySelector("#mobilePulseHint");
 const TAU = Math.PI * 2;
 const LEVEL_CLEAR_MUSIC_DELAY = 3.2;
 const BOSS_WARNING_DURATION = 17.2;
+const BOSS_PRE_SPAWN_CLEAR_DURATION = 3.2;
+const MUSIC_MUTE_STORAGE_KEY = "bloodstream-defender-music-muted";
+const SFX_MUTE_STORAGE_KEY = "bloodstream-defender-sfx-muted";
+const GAME_OVER_INPUT_LOCK_DURATION = 1.15;
 const keys = new Set();
 const pointer = {
   active: false,
@@ -180,6 +188,8 @@ const audio = {
   master: null,
   assetsReady: false,
   unlocked: false,
+  musicMuted: readMutePreference(MUSIC_MUTE_STORAGE_KEY),
+  sfxMuted: readMutePreference(SFX_MUTE_STORAGE_KEY),
   music: {},
   ambience: {},
   sfx: {},
@@ -187,6 +197,102 @@ const audio = {
   musicFadeSpeed: 1.8,
   sfxMasterVolume: 0.95,
 };
+
+function readMutePreference(key) {
+  try {
+    return window.localStorage?.getItem(key) === "true";
+  } catch (error) {
+    return false;
+  }
+}
+
+function storeMutePreference(key, muted) {
+  try {
+    window.localStorage?.setItem(key, String(muted));
+  } catch (error) {
+    // Mute still works for the current session if storage is unavailable.
+  }
+}
+
+function updateMuteButtons() {
+  if (musicMuteButton) {
+    musicMuteButton.classList.toggle("is-muted", audio.musicMuted);
+    musicMuteButton.setAttribute("aria-pressed", String(audio.musicMuted));
+    musicMuteButton.setAttribute(
+      "aria-label",
+      audio.musicMuted ? "Music is off. Press to turn music on." : "Music is on. Press to mute music.",
+    );
+    const valueEl = musicMuteButton.querySelector(".menu-action__status");
+    if (valueEl) valueEl.textContent = audio.musicMuted ? "Off" : "On";
+  }
+
+  if (sfxMuteButton) {
+    sfxMuteButton.classList.toggle("is-muted", audio.sfxMuted);
+    sfxMuteButton.setAttribute("aria-pressed", String(audio.sfxMuted));
+    sfxMuteButton.setAttribute(
+      "aria-label",
+      audio.sfxMuted ? "Sound effects are off. Press to turn sound effects on." : "Sound effects are on. Press to mute sound effects.",
+    );
+    const valueEl = sfxMuteButton.querySelector(".menu-action__status");
+    if (valueEl) valueEl.textContent = audio.sfxMuted ? "Off" : "On";
+  }
+}
+
+function silenceLoopTracks(tracks) {
+  for (const track of Object.values(tracks)) {
+    track.currentVolume = 0;
+    track.targetVolume = 0;
+    track.element.volume = 0;
+    track.element.pause();
+  }
+}
+
+function stopAllSfx() {
+  for (const sfx of Object.values(audio.sfx)) {
+    for (const element of sfx.pool) {
+      if (element.audioStopTimer) {
+        window.clearTimeout(element.audioStopTimer);
+        element.audioStopTimer = null;
+      }
+      if (element.audioFadeFrame) {
+        window.cancelAnimationFrame(element.audioFadeFrame);
+        element.audioFadeFrame = null;
+      }
+      element.pause();
+      try {
+        element.currentTime = 0;
+      } catch (error) {
+        // The next sound will restart cleanly once the browser allows seeking.
+      }
+    }
+  }
+}
+
+function setMusicMuted(muted) {
+  audio.musicMuted = muted;
+  storeMutePreference(MUSIC_MUTE_STORAGE_KEY, muted);
+  if (muted) {
+    silenceLoopTracks(audio.music);
+    silenceLoopTracks(audio.ambience);
+  }
+  updateMuteButtons();
+  updateAudioScene(0);
+}
+
+function setSfxMuted(muted) {
+  audio.sfxMuted = muted;
+  storeMutePreference(SFX_MUTE_STORAGE_KEY, muted);
+  if (muted) stopAllSfx();
+  updateMuteButtons();
+}
+
+function toggleMusicMuted() {
+  setMusicMuted(!audio.musicMuted);
+}
+
+function toggleSfxMuted() {
+  setSfxMuted(!audio.sfxMuted);
+}
 
 const state = {
   width: 1280,
@@ -209,6 +315,7 @@ const state = {
   bossMusicDelay: 0,
   bossWarningActive: false,
   bossWarningTimer: 0,
+  bossWarningCleared: false,
   pendingBossType: null,
   runStartMusicDelay: 0,
   ambienceIntroDelay: 0,
@@ -217,6 +324,7 @@ const state = {
   bossSpawned: false,
   bossDefeated: false,
   bossTriggerProgress: 0.85,
+  gameOverInputLockUntil: 0,
   time: 0,
   lastTime: performance.now(),
   scroll: 0,
@@ -793,14 +901,15 @@ function updateAudioScene(dt = 0.016) {
     audio.activeMusicKey = musicKey;
   }
   const pauseScale = state.paused ? 0.34 : 1;
+  const musicScale = audio.musicMuted ? 0 : 1;
   for (const [key, track] of Object.entries(audio.music)) {
-    updateLoopTrack(track, key === musicKey ? track.baseVolume * pauseScale : 0, dt);
+    updateLoopTrack(track, key === musicKey ? track.baseVolume * pauseScale * musicScale : 0, dt);
   }
 
   const ambienceHeld = state.bossMusicDelay > 0 || state.runStartMusicDelay > 0 || state.ambienceIntroDelay > 0;
   const playAmbience =
     state.running && !state.ended && !state.awaitingUpgrade && !state.levelComplete && !ambienceHeld;
-  const ambientIntensity = playAmbience ? (state.paused ? 0.34 : 1) : 0;
+  const ambientIntensity = playAmbience && !audio.musicMuted ? (state.paused ? 0.34 : 1) : 0;
   const ambienceScales = {
     bloodstream: 1,
     cellularSparkle: state.level >= 3 ? 0.55 : 0,
@@ -820,6 +929,7 @@ function unlockMenuAudio() {
 }
 
 function playAssetSfx(name, fallback) {
+  if (audio.sfxMuted) return;
   prepareAudioAssets();
   const sfx = audio.sfx[name];
   if (!audio.unlocked || !sfx) {
@@ -879,6 +989,7 @@ function playAssetSfx(name, fallback) {
 }
 
 function playTone({ type = "sine", start = 440, end = start, duration = 0.12, gain = 0.08 }) {
+  if (audio.sfxMuted) return;
   const context = ensureAudio();
   if (!context || !audio.master) return;
 
@@ -900,6 +1011,7 @@ function playTone({ type = "sine", start = 440, end = start, duration = 0.12, ga
 }
 
 function playNoise({ duration = 0.16, gain = 0.06, frequency = 900 }) {
+  if (audio.sfxMuted) return;
   const context = ensureAudio();
   if (!context || !audio.master) return;
 
@@ -1213,6 +1325,7 @@ function configureLevel(level) {
   state.bossMusicDelay = 0;
   state.bossWarningActive = false;
   state.bossWarningTimer = 0;
+  state.bossWarningCleared = false;
   state.pendingBossType = null;
   state.runStartMusicDelay = 0;
   state.ambienceIntroDelay = 1.4;
@@ -1316,7 +1429,7 @@ function openLevelCompleteScreen() {
   upgradeOverlay.hidden = true;
   playLevelCompleteSfx();
   syncPauseUi();
-  showUpgradeButton.focus();
+  levelCompletePanelEl.focus({ preventScroll: true });
 }
 
 function openUpgradeMenu() {
@@ -1339,7 +1452,8 @@ function openUpgradeMenu() {
   upgradePanelEl.focus({ preventScroll: true });
 }
 
-function showUpgradeTree() {
+function showUpgradeTree(event) {
+  if (!isOnScreenButtonActivation(event)) return;
   if (!state.levelComplete) return;
   state.levelComplete = false;
   levelCompleteOverlay.hidden = true;
@@ -1626,6 +1740,39 @@ function formatRunTime(seconds) {
   return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
+function isGameOverInputLocked() {
+  return state.ended && performance.now() < state.gameOverInputLockUntil;
+}
+
+function blockOverlayKeyboard(event) {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function armOnScreenButton(event) {
+  event.currentTarget.dataset.pointerArmedAt = String(performance.now());
+}
+
+function isOnScreenButtonActivation(event) {
+  const button = event?.currentTarget;
+  if (!(button instanceof HTMLButtonElement)) return false;
+
+  const armedAt = Number(button.dataset.pointerArmedAt || 0);
+  button.dataset.pointerArmedAt = "";
+
+  const hasFreshPointerDown = armedAt > 0 && performance.now() - armedAt < 1200;
+  if (hasFreshPointerDown) return true;
+
+  event.preventDefault();
+  event.stopPropagation();
+  return false;
+}
+
+function setGameOverRestartReady(ready) {
+  gameOverRestartButton.disabled = !ready;
+  gameOverRestartButton.setAttribute("aria-disabled", String(!ready));
+}
+
 function renderGameOverSummary() {
   const mission = state.currentMission || getMission(state.level);
   gameOverSubtitleEl.textContent = `Run ended during ${mission.name}: ${mission.term}.`;
@@ -1664,6 +1811,7 @@ function resetGame() {
   state.bossMusicDelay = 0;
   state.bossWarningActive = false;
   state.bossWarningTimer = 0;
+  state.bossWarningCleared = false;
   state.pendingBossType = null;
   state.runStartMusicDelay = 0;
   state.ambienceIntroDelay = 0;
@@ -1671,6 +1819,7 @@ function resetGame() {
   state.bossSpawned = false;
   state.bossDefeated = false;
   state.bossTriggerProgress = 0.85;
+  state.gameOverInputLockUntil = 0;
   state.time = 0;
   state.scroll = 0;
   state.nextVirus = 1.25;
@@ -1728,6 +1877,7 @@ function resetGame() {
   state.ambienceIntroDelay = 2.25;
   overlay.hidden = true;
   gameOverOverlay.hidden = true;
+  setGameOverRestartReady(true);
   levelCompleteOverlay.hidden = true;
   upgradeOverlay.hidden = true;
   syncPauseUi();
@@ -2034,6 +2184,13 @@ function spawnBossAdd(boss, type, angle, speed = rand(90, 130)) {
   });
   add.bossAdd = true;
   return add;
+}
+
+function clearBossApproachHazards() {
+  state.viruses = state.viruses.filter((virus) => isBossVirus(virus));
+  state.platelets = [];
+  state.shots = [];
+  state.lockTarget = null;
 }
 
 function updatePoxBoss(boss, dt) {
@@ -2569,35 +2726,44 @@ function updateSpawns(dt) {
   const encounterActive = isBossMission(mission);
   const bossTriggerReached =
     encounterActive && getDistanceProgress() >= (state.bossTriggerProgress || 0.86);
+  let bossApproachClearActive = false;
 
   if (state.bossWarningActive) {
     state.bossWarningTimer = Math.max(0, state.bossWarningTimer - dt);
-    state.nextVirus = Math.max(state.nextVirus, 0.7);
-    state.nextPlatelet = Math.max(state.nextPlatelet, 2.4);
+    bossApproachClearActive = state.bossWarningTimer <= BOSS_PRE_SPAWN_CLEAR_DURATION;
+    if (bossApproachClearActive && !state.bossWarningCleared) {
+      clearBossApproachHazards();
+      state.bossWarningCleared = true;
+      state.nextVirus = 1.4;
+      state.nextPlatelet = 4.8;
+      showLevelBanner("Clear vessel lane", 1.65);
+    }
+
     if (state.bossWarningTimer === 0 && !state.bossSpawned) {
       spawnBoss(state.pendingBossType || mission.bossType);
       state.bossSpawned = true;
       state.bossWarningActive = false;
+      state.bossWarningCleared = false;
       state.pendingBossType = null;
       state.bossMusicDelay = 0;
       state.nextVirus = 1.6;
       state.nextPlatelet = 5.8;
     }
   } else if (bossTriggerReached && !state.bossSpawned) {
-    state.viruses = [];
-    state.shots = [];
-    state.lockTarget = null;
     state.bossWarningActive = true;
     state.bossWarningTimer = BOSS_WARNING_DURATION;
+    state.bossWarningCleared = false;
     state.pendingBossType = mission.bossType;
     state.bossMusicDelay = BOSS_WARNING_DURATION;
-    state.nextVirus = 0.9;
-    state.nextPlatelet = 3.2;
+    state.nextVirus = Math.min(state.nextVirus, 0.45);
+    state.nextPlatelet = Math.min(state.nextPlatelet, 1.8);
     showLevelBanner("Pathogen signal building", 2.35);
     playBossWarningSfx();
   }
 
-  if ((!encounterActive || (!state.bossSpawned && !state.bossWarningActive)) && state.nextVirus <= 0) {
+  const encounterCanSpawn =
+    !encounterActive || (!state.bossSpawned && (!state.bossWarningActive || !bossApproachClearActive));
+  if (encounterCanSpawn && state.nextVirus <= 0) {
     spawnVirus();
     state.nextVirus = rand(0.78, 1.35) * levelConfig.spawnScale;
   }
@@ -2607,7 +2773,7 @@ function updateSpawns(dt) {
     state.nextRedCell = rand(0.45, 0.9);
   }
 
-  if (!state.bossWarningActive && state.nextPlatelet <= 0) {
+  if ((!state.bossWarningActive || !bossApproachClearActive) && state.nextPlatelet <= 0) {
     spawnPlatelet();
     state.nextPlatelet = rand(4.4, 7.2) * Math.max(0.72, levelConfig.spawnScale);
   }
@@ -2942,19 +3108,36 @@ function hurtPlayer(amount, x, y, color, soft = false) {
 }
 
 function endGame() {
+  if (state.ended) return;
   state.running = false;
   state.ended = true;
   state.paused = false;
   state.awaitingUpgrade = false;
   state.levelComplete = false;
+  state.gameOverInputLockUntil = performance.now() + GAME_OVER_INPUT_LOCK_DURATION * 1000;
+  pointer.down = false;
+  pointer.active = false;
+  keys.clear();
+  resetHeldActionInputs();
+  resetMobileJoystick();
+  mobileInput.fire = false;
+  setMobileButtonPressed(mobileFireButton, false);
+  setMobileButtonPressed(mobileDashButton, false);
+  setMobileButtonPressed(mobilePulseButton, false);
   overlay.hidden = true;
   gameOverOverlay.hidden = false;
+  setGameOverRestartReady(false);
   pauseOverlay.hidden = true;
   levelCompleteOverlay.hidden = true;
   upgradeOverlay.hidden = true;
   renderGameOverSummary();
   syncPauseUi();
-  gameOverRestartButton.focus();
+  gameOverFrameEl.focus({ preventScroll: true });
+  window.setTimeout(() => {
+    if (!state.ended || gameOverOverlay.hidden) return;
+    setGameOverRestartReady(true);
+    gameOverFrameEl.focus({ preventScroll: true });
+  }, GAME_OVER_INPUT_LOCK_DURATION * 1000);
 }
 
 function draw() {
@@ -3740,6 +3923,11 @@ window.addEventListener("keydown", (event) => {
   unlockMenuAudio();
   ensureAudio();
 
+  if (state.levelComplete || state.ended) {
+    blockOverlayKeyboard(event);
+    return;
+  }
+
   if (event.code === "Escape" || event.code === "KeyP") {
     if (state.running && !state.ended) {
       event.preventDefault();
@@ -3753,14 +3941,6 @@ window.addEventListener("keydown", (event) => {
     const isUpgradeControl =
       target instanceof HTMLButtonElement && upgradeOverlay.contains(target);
     if (!isUpgradeControl) event.preventDefault();
-    return;
-  }
-
-  if (state.levelComplete) {
-    const target = event.target;
-    const isCompleteControl =
-      target instanceof HTMLButtonElement && levelCompleteOverlay.contains(target);
-    if (!isCompleteControl) event.preventDefault();
     return;
   }
 
@@ -3789,7 +3969,7 @@ window.addEventListener("keydown", (event) => {
     keys.add(event.code);
   }
 
-  if (!state.running && (event.code === "Space" || event.code === "Enter")) {
+  if (!state.running && !state.ended && (event.code === "Space" || event.code === "Enter")) {
     resetGame();
   }
 });
@@ -3808,7 +3988,7 @@ canvas.addEventListener("pointermove", updatePointer);
 canvas.addEventListener("pointerdown", (event) => {
   ensureAudio();
   updatePointer(event);
-  if (state.paused || state.awaitingUpgrade || state.levelComplete) {
+  if (state.ended || state.paused || state.awaitingUpgrade || state.levelComplete) {
     pointer.down = false;
     return;
   }
@@ -3832,6 +4012,9 @@ canvas.addEventListener("pointerleave", () => {
 function startRunFromUi(event) {
   event?.preventDefault();
   event?.stopPropagation();
+  if (event?.currentTarget === gameOverRestartButton) {
+    if (isGameOverInputLocked() || !isOnScreenButtonActivation(event)) return;
+  }
   ensureAudio();
   requestMobileFullscreen();
 
@@ -3843,12 +4026,16 @@ function startRunFromUi(event) {
 
 startButton.addEventListener("click", startRunFromUi);
 startButton.addEventListener("pointerdown", startRunFromUi);
+gameOverRestartButton.addEventListener("pointerdown", armOnScreenButton);
 gameOverRestartButton.addEventListener("click", startRunFromUi);
 pauseButton.addEventListener("click", togglePaused);
 resumeButton.addEventListener("click", () => setPaused(false));
+musicMuteButton?.addEventListener("click", toggleMusicMuted);
+sfxMuteButton?.addEventListener("click", toggleSfxMuted);
 restartButton.addEventListener("click", requestRestartRun);
 cancelRestartButton.addEventListener("click", () => setRestartConfirmOpen(false));
 confirmRestartButton.addEventListener("click", confirmRestartRun);
+showUpgradeButton.addEventListener("pointerdown", armOnScreenButton);
 showUpgradeButton.addEventListener("click", showUpgradeTree);
 for (const card of upgradeCards) {
   card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
@@ -3857,6 +4044,7 @@ bindMobileControls();
 
 resize();
 renderUpgradeCards();
+updateMuteButtons();
 resetGame();
 state.running = false;
 state.paused = false;

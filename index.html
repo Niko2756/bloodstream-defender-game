@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Bloodstream Defender</title>
     <link rel="icon" href="data:," />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260605-result-input" />
   </head>
   <body>
     <main class="game-shell" aria-label="Bloodstream Defender game">
@@ -96,7 +96,7 @@
       </section>
 
       <section id="gameOverOverlay" class="overlay game-over-overlay" role="dialog" aria-modal="true" aria-labelledby="gameOverTitle" hidden>
-        <div class="game-over-frame">
+        <div class="game-over-frame" tabindex="-1">
           <img class="game-over-art" src="./assets/ui/game-over-summary-panel.png" alt="" draggable="false" />
           <div class="game-over-title">
             <span class="overlay-eyebrow">Immune Response Report</span>
@@ -138,6 +138,16 @@
           <h1 id="pauseTitle">Paused</h1>
           <div class="pause-menu">
             <button id="resumeButton" class="menu-action menu-action--primary" type="button">Resume</button>
+            <div class="pause-audio-controls" aria-label="Audio settings">
+              <button id="musicMuteButton" class="menu-action menu-action--toggle" type="button" aria-pressed="false">
+                <span class="menu-action__label">Music</span>
+                <span class="menu-action__status">On</span>
+              </button>
+              <button id="sfxMuteButton" class="menu-action menu-action--toggle" type="button" aria-pressed="false">
+                <span class="menu-action__label">Effects</span>
+                <span class="menu-action__status">On</span>
+              </button>
+            </div>
             <button id="restartButton" class="menu-action menu-action--secondary" type="button" aria-expanded="false" aria-controls="restartConfirm">Restart Run</button>
             <div id="restartConfirm" class="restart-confirm" role="group" aria-label="Confirm restart run" hidden>
               <p class="restart-confirm__title">Restart this run?</p>
@@ -152,7 +162,7 @@
       </section>
 
       <section id="levelCompleteOverlay" class="overlay level-complete-overlay" role="dialog" aria-modal="true" aria-labelledby="levelCompleteTitle" hidden>
-        <div class="level-complete-panel">
+        <div class="level-complete-panel" tabindex="-1">
           <span class="overlay-eyebrow">Vessel Section Cleared</span>
           <h1 id="levelCompleteTitle">Mission Complete</h1>
           <p id="levelCompleteMission">Innate Patrol: Innate immunity</p>
@@ -193,6 +203,6 @@
       </section>
     </main>
 
-    <script src="./src/game.js" type="module"></script>
+    <script src="./src/game.js?v=20260605-result-input" type="module"></script>
   </body>
 </html>
