@@ -81,6 +81,8 @@ const mobileInput = {
   fire: false,
 };
 let lastTouchEndAt = 0;
+let lastBossHitSfxAt = 0;
+let lastUpgradeHoverSfxAt = 0;
 
 const audioManifest = {
   music: {
@@ -143,6 +145,13 @@ const audioManifest = {
       volume: 0.6,
       poolSize: 3,
     },
+    chemotaxisDashUpgraded: {
+      src: "./assets/audio/Chemotaxis%20dash%20upgraded.wav",
+      volume: 0.7,
+      poolSize: 3,
+      maxDuration: 1.12,
+      fadeOut: 0.24,
+    },
     complementPulse: {
       src: "./assets/audio/Complement%20pulse.wav",
       volume: 0.68,
@@ -179,6 +188,90 @@ const audioManifest = {
       poolSize: 1,
       maxDuration: BOSS_WARNING_DURATION,
       fadeOut: 2,
+    },
+    bossHit: {
+      src: "./assets/audio/Boss%20Hit.wav",
+      volume: 0.68,
+      poolSize: 3,
+      maxDuration: 0.82,
+      fadeOut: 0.18,
+    },
+    bossDefeated: {
+      src: "./assets/audio/Boss%20defeated.mp3",
+      volume: 0.62,
+      poolSize: 1,
+      maxDuration: 2.4,
+      fadeOut: 0.65,
+    },
+    bossPhaseChange: {
+      src: "./assets/audio/Boss%20phase%20change.mp3",
+      volume: 0.54,
+      poolSize: 1,
+      maxDuration: 2.7,
+      fadeOut: 0.65,
+    },
+    buddingSplit: {
+      src: "./assets/audio/Budding%20virus%20split.wav",
+      volume: 0.54,
+      poolSize: 3,
+      maxDuration: 1.15,
+      fadeOut: 0.28,
+    },
+    influenzaHit: {
+      src: "./assets/audio/Influenza%20hit.wav",
+      volume: 0.46,
+      poolSize: 4,
+      maxDuration: 0.7,
+      fadeOut: 0.18,
+    },
+    influenzaReplication: {
+      src: "./assets/audio/Influenza%20replication%20bloom.wav",
+      volume: 0.56,
+      poolSize: 3,
+      maxDuration: 1.35,
+      fadeOut: 0.28,
+    },
+    pauseOpen: {
+      src: "./assets/audio/Pause%20open.wav",
+      volume: 0.46,
+      poolSize: 2,
+      maxDuration: 0.85,
+      fadeOut: 0.22,
+    },
+    pauseResume: {
+      src: "./assets/audio/Pause%20resume.mp3",
+      volume: 0.42,
+      poolSize: 1,
+      maxDuration: 1.15,
+      fadeOut: 0.36,
+    },
+    plateletBump: {
+      src: "./assets/audio/Platelet%20or%20clot%20bump-crack.wav",
+      volume: 0.58,
+      poolSize: 3,
+      maxDuration: 1.05,
+      fadeOut: 0.25,
+    },
+    restartConfirm: {
+      src: "./assets/audio/Restart%20confirmation%20open.wav",
+      volume: 0.5,
+      poolSize: 2,
+      maxDuration: 1.2,
+      fadeOut: 0.28,
+    },
+    upgradeHover: {
+      src: "./assets/audio/Upgrade%20card%20hover.wav",
+      volume: 0.28,
+      poolSize: 2,
+      maxDuration: 0.42,
+      fadeOut: 0.14,
+    },
+    uiSelect: {
+      src: "./assets/audio/ui_button_select.wav",
+      volume: 0.44,
+      poolSize: 3,
+      maxDuration: 0.55,
+      fadeOut: 0.16,
     },
   },
 };
@@ -1060,6 +1153,19 @@ function playSwimSurgeSfx(direction) {
   });
 }
 
+function playChemotaxisDashSfx(direction) {
+  playAssetSfx("chemotaxisDashUpgraded", () => {
+    playNoise({ duration: 0.2, gain: 0.15, frequency: direction > 0 ? 860 : 640 });
+    playTone({
+      type: "triangle",
+      start: direction > 0 ? 260 : 210,
+      end: direction > 0 ? 680 : 140,
+      duration: 0.2,
+      gain: 0.09,
+    });
+  });
+}
+
 function playVirusPopSfx() {
   playAssetSfx("virusPop", () => {
     playNoise({ duration: 0.22, gain: 0.18, frequency: 640 });
@@ -1071,6 +1177,100 @@ function playAntibodyHitSfx() {
   playAssetSfx("antibodyHit", () => {
     playTone({ type: "triangle", start: 440, end: 720, duration: 0.09, gain: 0.08 });
   });
+}
+
+function playBossHitSfx() {
+  const now = performance.now();
+  if (now - lastBossHitSfxAt < 150) return;
+  lastBossHitSfxAt = now;
+  playAssetSfx("bossHit", () => {
+    playNoise({ duration: 0.12, gain: 0.14, frequency: 180 });
+    playTone({ type: "sawtooth", start: 240, end: 120, duration: 0.12, gain: 0.08 });
+  });
+}
+
+function playBossDefeatedSfx() {
+  playAssetSfx("bossDefeated", () => {
+    playNoise({ duration: 0.32, gain: 0.18, frequency: 110 });
+    playTone({ type: "triangle", start: 180, end: 520, duration: 0.34, gain: 0.1 });
+  });
+}
+
+function playBossPhaseChangeSfx() {
+  playAssetSfx("bossPhaseChange", () => {
+    playNoise({ duration: 0.24, gain: 0.16, frequency: 240 });
+    playTone({ type: "sawtooth", start: 160, end: 360, duration: 0.22, gain: 0.08 });
+  });
+}
+
+function playBuddingSplitSfx() {
+  playAssetSfx("buddingSplit", () => {
+    playNoise({ duration: 0.18, gain: 0.16, frequency: 520 });
+    playTone({ type: "triangle", start: 360, end: 180, duration: 0.14, gain: 0.08 });
+  });
+}
+
+function playInfluenzaHitSfx() {
+  playAssetSfx("influenzaHit", () => {
+    playTone({ type: "triangle", start: 320, end: 560, duration: 0.1, gain: 0.08 });
+  });
+}
+
+function playInfluenzaReplicationSfx() {
+  playAssetSfx("influenzaReplication", () => {
+    playNoise({ duration: 0.2, gain: 0.14, frequency: 460 });
+    playTone({ type: "sine", start: 220, end: 680, duration: 0.18, gain: 0.08 });
+  });
+}
+
+function playPlateletBumpSfx() {
+  playAssetSfx("plateletBump", () => {
+    playNoise({ duration: 0.16, gain: 0.15, frequency: 300 });
+    playTone({ type: "sawtooth", start: 190, end: 92, duration: 0.14, gain: 0.08 });
+  });
+}
+
+function playPauseOpenSfx() {
+  playAssetSfx("pauseOpen", () => {
+    playTone({ type: "triangle", start: 520, end: 320, duration: 0.14, gain: 0.08 });
+  });
+}
+
+function playPauseResumeSfx() {
+  playAssetSfx("pauseResume", () => {
+    playTone({ type: "triangle", start: 320, end: 560, duration: 0.14, gain: 0.08 });
+  });
+}
+
+function playRestartConfirmSfx() {
+  playAssetSfx("restartConfirm", () => {
+    playTone({ type: "sawtooth", start: 240, end: 180, duration: 0.18, gain: 0.08 });
+  });
+}
+
+function playUpgradeHoverSfx() {
+  const now = performance.now();
+  if (now - lastUpgradeHoverSfxAt < 130) return;
+  lastUpgradeHoverSfxAt = now;
+  playAssetSfx("upgradeHover", () => {
+    playTone({ type: "sine", start: 680, end: 920, duration: 0.09, gain: 0.05 });
+  });
+}
+
+function playUiSelectSfx() {
+  playAssetSfx("uiSelect", () => {
+    playTone({ type: "triangle", start: 520, end: 760, duration: 0.08, gain: 0.07 });
+  });
+}
+
+function playVirusHitSfx(virus) {
+  if (isBossVirus(virus)) {
+    playBossHitSfx();
+  } else if (virus.type === "influenza") {
+    playInfluenzaHitSfx();
+  } else {
+    playAntibodyHitSfx();
+  }
 }
 
 function playUpgradeSfx() {
@@ -1351,6 +1551,10 @@ function isUpgradeMaxed(upgrade) {
   return (state.upgrades[upgrade.id] || 0) >= upgrade.levels.length;
 }
 
+function areAllUpgradesMaxed() {
+  return upgradeOptions.every((upgrade) => isUpgradeMaxed(upgrade));
+}
+
 function getUpgradeNextText(upgrade) {
   const rank = state.upgrades[upgrade.id] || 0;
   if (rank >= upgrade.levels.length) return "Fully adapted";
@@ -1425,6 +1629,7 @@ function openLevelCompleteScreen() {
     : `${state.levelKills} ${mission.target} neutralized`;
   levelCompleteHealthEl.textContent = `Health ${health}%`;
   nextMissionPreviewEl.textContent = `Next section: ${nextMission.name} (${nextMission.term})`;
+  showUpgradeButton.textContent = areAllUpgradesMaxed() ? "Continue" : "Choose Adaptation";
   levelCompleteOverlay.hidden = false;
   upgradeOverlay.hidden = true;
   playLevelCompleteSfx();
@@ -1455,6 +1660,15 @@ function openUpgradeMenu() {
 function showUpgradeTree(event) {
   if (!isOnScreenButtonActivation(event)) return;
   if (!state.levelComplete) return;
+  playUiSelectSfx();
+
+  if (areAllUpgradesMaxed()) {
+    state.levelComplete = false;
+    levelCompleteOverlay.hidden = true;
+    startNextLevel();
+    return;
+  }
+
   state.levelComplete = false;
   levelCompleteOverlay.hidden = true;
   openUpgradeMenu();
@@ -1706,8 +1920,10 @@ function setPaused(paused) {
   syncPauseUi();
 
   if (paused) {
+    playPauseOpenSfx();
     resumeButton.focus();
   } else if (state.running && !state.ended) {
+    playPauseResumeSfx();
     pauseButton.focus();
   }
 }
@@ -1726,9 +1942,16 @@ function setRestartConfirmOpen(open) {
 
 function requestRestartRun() {
   setRestartConfirmOpen(true);
+  playRestartConfirmSfx();
+}
+
+function cancelRestartRun() {
+  setRestartConfirmOpen(false);
+  playUiSelectSfx();
 }
 
 function confirmRestartRun() {
+  playUiSelectSfx();
   setRestartConfirmOpen(false);
   resetGame();
 }
@@ -2199,6 +2422,7 @@ function updatePoxBoss(boss, dt) {
   if (nextPhase > boss.phase) {
     boss.phase = nextPhase;
     state.shake = Math.max(state.shake, 0.2 + nextPhase * 0.04);
+    playBossPhaseChangeSfx();
     addParticleBurst(boss.x, boss.y, boss.color, 18 + nextPhase * 4, 150);
     spawnVirusFragment(boss, -1);
     spawnVirusFragment(boss, 1);
@@ -2527,7 +2751,13 @@ function destroyVirus(virus, source = "shot") {
   }
   state.stats.virionsNeutralized += 1;
   state.shake = Math.max(state.shake, isBossVirus(virus) ? 0.46 : source === "pulse" ? 0.34 : 0.18);
-  playVirusPopSfx();
+  if (isBossVirus(virus)) {
+    playBossDefeatedSfx();
+  } else if (virus.type === "budding") {
+    playBuddingSplitSfx();
+  } else {
+    playVirusPopSfx();
+  }
   addParticleBurst(virus.x, virus.y, virus.color, isBossVirus(virus) ? 44 : virus.type === "tank" ? 26 : 18, isBossVirus(virus) ? 220 : 145);
 
   if (virus.type === "budding") {
@@ -2566,7 +2796,7 @@ function triggerDash(horizontalInput, verticalInput) {
   state.dashTimer = 0.22;
   state.dashCooldown = Math.max(1.4, 3.2 - dashRank * 0.42);
   state.shake = Math.max(state.shake, 0.18);
-  playSwimSurgeSfx(dx >= 0 ? 1 : -1);
+  playChemotaxisDashSfx(dx >= 0 ? 1 : -1);
   addParticleBurst(player.x - dx * player.radius, player.y - dy * player.radius, palette.cyan, 12, 155);
   return true;
 }
@@ -2904,6 +3134,7 @@ function replicateInfluenzaViruses() {
       const burstX = (first.x + second.x) * 0.5;
       const burstY = (first.y + second.y) * 0.5;
       state.shake = Math.max(state.shake, 0.16);
+      playInfluenzaReplicationSfx();
       addParticleBurst(burstX, burstY, "#ff9b2f", 16, 120);
 
       if (state.influenzaNoticeTimer === 0) {
@@ -3011,7 +3242,7 @@ function applyShotHit(virus, shot) {
     virus.hit = 0.18;
     shot.life = -1;
     state.shake = Math.max(state.shake, 0.08);
-    playAntibodyHitSfx();
+    playVirusHitSfx(virus);
     addParticleBurst(shot.x, shot.y, "#9ff8ff", 8, 92);
     return;
   }
@@ -3023,7 +3254,7 @@ function applyShotHit(virus, shot) {
   if (virus.hp <= 0) {
     destroyVirus(virus);
   } else {
-    playAntibodyHitSfx();
+    playVirusHitSfx(virus);
   }
 }
 
@@ -3080,13 +3311,14 @@ function checkCollisions() {
 
   for (const platelet of state.platelets) {
     if (distance(player, platelet) < player.radius + platelet.radius * 0.86) {
-      hurtPlayer(18, platelet.x, platelet.y, palette.platelet);
+      playPlateletBumpSfx();
+      hurtPlayer(18, platelet.x, platelet.y, palette.platelet, false, false);
       platelet.x = -999;
     }
   }
 }
 
-function hurtPlayer(amount, x, y, color, soft = false) {
+function hurtPlayer(amount, x, y, color, soft = false, playDamageSound = true) {
   const player = state.player;
   if (player.invulnerable > 0 && !soft) return;
   if (soft && player.hurtTimer > 0) return;
@@ -3097,7 +3329,7 @@ function hurtPlayer(amount, x, y, color, soft = false) {
   player.hurtTimer = soft ? 0.35 : 0.7;
   player.invulnerable = soft ? player.invulnerable : 0.55;
   addParticleBurst(x, y, color, soft ? 4 : 16, soft ? 55 : 150);
-  if (!soft) {
+  if (!soft && playDamageSound) {
     if (player.health <= 0) playPlayerDeathSfx();
     else playPlayerDamageSfx();
   }
@@ -4033,11 +4265,17 @@ resumeButton.addEventListener("click", () => setPaused(false));
 musicMuteButton?.addEventListener("click", toggleMusicMuted);
 sfxMuteButton?.addEventListener("click", toggleSfxMuted);
 restartButton.addEventListener("click", requestRestartRun);
-cancelRestartButton.addEventListener("click", () => setRestartConfirmOpen(false));
+cancelRestartButton.addEventListener("click", cancelRestartRun);
 confirmRestartButton.addEventListener("click", confirmRestartRun);
 showUpgradeButton.addEventListener("pointerdown", armOnScreenButton);
 showUpgradeButton.addEventListener("click", showUpgradeTree);
 for (const card of upgradeCards) {
+  card.addEventListener("pointerenter", () => {
+    if (!card.disabled) playUpgradeHoverSfx();
+  });
+  card.addEventListener("focus", () => {
+    if (!card.disabled) playUpgradeHoverSfx();
+  });
   card.addEventListener("click", () => chooseUpgrade(card.dataset.upgrade));
 }
 bindMobileControls();
