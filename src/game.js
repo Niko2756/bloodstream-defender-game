@@ -67,6 +67,13 @@ const BOSS_PRE_SPAWN_CLEAR_DURATION = 3.2;
 const MUSIC_MUTE_STORAGE_KEY = "bloodstream-defender-music-muted";
 const SFX_MUTE_STORAGE_KEY = "bloodstream-defender-sfx-muted";
 const GAME_OVER_INPUT_LOCK_DURATION = 1.15;
+const MAX_POOLED_SHOTS = 260;
+const MAX_POOLED_PARTICLES = 520;
+const shotPool = [];
+const particlePool = [];
+const renderCache = {
+  shotSprite: null,
+};
 const keys = new Set();
 const pointer = {
   active: false,
@@ -1359,10 +1366,159 @@ function drawAtlasFrame(frame, x, y, targetHeight, options = {}) {
   return drawImageFrame(spriteAtlas, frame, x, y, targetHeight, options);
 }
 
+function createCachedShotSprite() {
+  const pixelRatio = Math.min(state.dpr || 1, 2);
+  const logicalWidth = 68;
+  const logicalHeight = 38;
+  const originX = 30;
+  const originY = logicalHeight * 0.5;
+  const spriteCanvas = document.createElement("canvas");
+  spriteCanvas.width = Math.ceil(logicalWidth * pixelRatio);
+  spriteCanvas.height = Math.ceil(logicalHeight * pixelRatio);
+  const spriteCtx = spriteCanvas.getContext("2d");
+  spriteCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  spriteCtx.imageSmoothingEnabled = true;
+  spriteCtx.imageSmoothingQuality = "high";
+  spriteCtx.translate(originX, originY);
+  spriteCtx.shadowColor = palette.cyan;
+  spriteCtx.shadowBlur = 8;
+  spriteCtx.globalAlpha = 0.34;
+  spriteCtx.strokeStyle = "rgba(96, 239, 255, 0.62)";
+  spriteCtx.lineWidth = 2.2;
+  spriteCtx.lineCap = "round";
+  spriteCtx.beginPath();
+  spriteCtx.moveTo(-24, 0);
+  spriteCtx.lineTo(-9, 0);
+  spriteCtx.stroke();
+
+  spriteCtx.globalAlpha = 0.5;
+  spriteCtx.strokeStyle = "rgba(96, 239, 255, 0.88)";
+  spriteCtx.lineWidth = 6;
+  spriteCtx.beginPath();
+  spriteCtx.moveTo(-8, 0);
+  spriteCtx.lineTo(2.5, 0);
+  spriteCtx.moveTo(2.5, 0);
+  spriteCtx.lineTo(12, -6);
+  spriteCtx.moveTo(2.5, 0);
+  spriteCtx.lineTo(12, 6);
+  spriteCtx.stroke();
+
+  spriteCtx.globalAlpha = 0.92;
+  spriteCtx.strokeStyle = "rgba(176, 255, 255, 0.96)";
+  spriteCtx.lineWidth = 2.8;
+  spriteCtx.beginPath();
+  spriteCtx.moveTo(-8, 0);
+  spriteCtx.lineTo(2.5, 0);
+  spriteCtx.moveTo(2.5, 0);
+  spriteCtx.lineTo(12, -6);
+  spriteCtx.moveTo(2.5, 0);
+  spriteCtx.lineTo(12, 6);
+  spriteCtx.stroke();
+
+  spriteCtx.globalAlpha = 1;
+  spriteCtx.fillStyle = "#dfffff";
+  spriteCtx.beginPath();
+  spriteCtx.arc(12, -6, 1.5, 0, TAU);
+  spriteCtx.arc(12, 6, 1.5, 0, TAU);
+  spriteCtx.fill();
+
+  renderCache.shotSprite = {
+    canvas: spriteCanvas,
+    key: `shot-${pixelRatio}`,
+    logicalWidth,
+    logicalHeight,
+    originX,
+    originY,
+  };
+}
+
+function getCachedShotSprite() {
+  const key = `shot-${Math.min(state.dpr || 1, 2)}`;
+  if (!renderCache.shotSprite || renderCache.shotSprite.key !== key) {
+    createCachedShotSprite();
+  }
+  return renderCache.shotSprite;
+}
+
+function getScaledParallaxLayer(asset, drawWidth, drawHeight) {
+  if (!asset.loaded) return null;
+
+  const pixelRatio = Math.min(state.dpr || 1, 2);
+  const logicalWidth = Math.max(1, Math.ceil(drawWidth));
+  const logicalHeight = Math.max(1, Math.ceil(drawHeight));
+  const key = `${logicalWidth}x${logicalHeight}@${pixelRatio}`;
+  if (asset.scaledLayer?.key === key) return asset.scaledLayer;
+
+  const layerCanvas = document.createElement("canvas");
+  layerCanvas.width = Math.ceil(logicalWidth * pixelRatio);
+  layerCanvas.height = Math.ceil(logicalHeight * pixelRatio);
+  const layerCtx = layerCanvas.getContext("2d");
+  layerCtx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  layerCtx.imageSmoothingEnabled = true;
+  layerCtx.imageSmoothingQuality = "high";
+  layerCtx.drawImage(asset.image, 0, 0, logicalWidth, logicalHeight);
+  asset.scaledLayer = {
+    canvas: layerCanvas,
+    key,
+    logicalWidth,
+    logicalHeight,
+  };
+  return asset.scaledLayer;
+}
+
 function distance(a, b) {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return Math.hypot(dx, dy);
+}
+
+function distanceSquared(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return dx * dx + dy * dy;
+}
+
+function isWithinDistance(a, b, radius) {
+  return distanceSquared(a, b) < radius * radius;
+}
+
+function compactArray(array, shouldKeep, releaseItem) {
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < array.length; readIndex += 1) {
+    const item = array[readIndex];
+    if (shouldKeep(item)) {
+      if (writeIndex !== readIndex) array[writeIndex] = item;
+      writeIndex += 1;
+    } else if (releaseItem) {
+      releaseItem(item);
+    }
+  }
+  array.length = writeIndex;
+}
+
+function clearRuntimeArray(array, releaseItem) {
+  if (releaseItem) {
+    for (const item of array) releaseItem(item);
+  }
+  array.length = 0;
+}
+
+function recycleShot(shot) {
+  shot.target = null;
+  if (shotPool.length < MAX_POOLED_SHOTS) shotPool.push(shot);
+}
+
+function recycleParticle(particle) {
+  if (particlePool.length < MAX_POOLED_PARTICLES) particlePool.push(particle);
+}
+
+function clearShots() {
+  clearRuntimeArray(state.shots, recycleShot);
+  state.lockTarget = null;
+}
+
+function clearParticles() {
+  clearRuntimeArray(state.particles, recycleParticle);
 }
 
 function resize() {
@@ -1613,9 +1769,9 @@ function openLevelCompleteScreen() {
   pointer.down = false;
   keys.clear();
   resetHeldActionInputs();
-  state.viruses = [];
-  state.platelets = [];
-  state.shots = [];
+  state.viruses.length = 0;
+  state.platelets.length = 0;
+  clearShots();
   state.lockTarget = null;
 
   const mission = state.currentMission || getMission(state.level);
@@ -1644,9 +1800,9 @@ function openUpgradeMenu() {
   pointer.down = false;
   keys.clear();
   resetHeldActionInputs();
-  state.viruses = [];
-  state.platelets = [];
-  state.shots = [];
+  state.viruses.length = 0;
+  state.platelets.length = 0;
+  clearShots();
   state.lockTarget = null;
   const nextMission = getMission(state.level + 1);
   upgradeIntroEl.textContent = `Section ${state.level} cleared. Prepare for ${nextMission.name}: ${nextMission.term}.`;
@@ -2065,11 +2221,11 @@ function resetGame() {
     horizontalPose: 0,
     horizontalSoundInput: 0,
   };
-  state.shots = [];
-  state.viruses = [];
-  state.redCells = [];
-  state.platelets = [];
-  state.particles = [];
+  clearShots();
+  state.viruses.length = 0;
+  state.redCells.length = 0;
+  state.platelets.length = 0;
+  clearParticles();
   state.lockTarget = null;
   state.upgrades = {
     rapid: 0,
@@ -2206,7 +2362,7 @@ function spawnVirus(typeOverride = null, options = {}) {
   if (
     type === "influenza" &&
     !typeOverride &&
-    getLiveInfluenzaViruses().length >= getInfluenzaCap()
+    countLiveInfluenzaViruses() >= getInfluenzaCap()
   ) {
     type = state.level > 2 && roll > 0.62 ? "tank" : "fast";
   }
@@ -2410,9 +2566,9 @@ function spawnBossAdd(boss, type, angle, speed = rand(90, 130)) {
 }
 
 function clearBossApproachHazards() {
-  state.viruses = state.viruses.filter((virus) => isBossVirus(virus));
-  state.platelets = [];
-  state.shots = [];
+  compactArray(state.viruses, (virus) => isBossVirus(virus));
+  state.platelets.length = 0;
+  clearShots();
   state.lockTarget = null;
 }
 
@@ -2518,9 +2674,9 @@ function completeLevel() {
 
   state.levelTransitionTimer = 1.55;
   state.stats.sectionsCleared += 1;
-  state.viruses = [];
-  state.platelets = [];
-  state.shots = [];
+  state.viruses.length = 0;
+  state.platelets.length = 0;
+  clearShots();
   state.lockTarget = null;
   showLevelBanner(`${state.currentMission?.name || "Section"} Cleared`, 1.45);
 
@@ -2667,20 +2823,21 @@ function addAntibodyShot(player, aim, dx, dy, angleOffset = 0) {
   const muzzle = player.radius + 10;
   const shotSpeed = 620 + rapidRank * 42;
   const screenTravelLife = (Math.hypot(state.width, state.height) + 260) / shotSpeed;
+  const shot = shotPool.pop() || {};
 
-  state.shots.push({
-    x: player.x + shotDirection.x * muzzle,
-    y: player.y + shotDirection.y * muzzle,
-    vx: shotDirection.x * shotSpeed + player.vx * 0.18,
-    vy: shotDirection.y * shotSpeed + player.vy * 0.18,
-    radius: 4.2,
-    hitRadius: 6.8 + rapidRank * 0.4,
-    life: Math.max(2.1, screenTravelLife),
-    damage: rapidRank >= 3 ? 3 : 2,
-    target: aim.target,
-    age: 0,
-    frameIndex: randomFrameIndex("antibody"),
-  });
+  shot.x = player.x + shotDirection.x * muzzle;
+  shot.y = player.y + shotDirection.y * muzzle;
+  shot.vx = shotDirection.x * shotSpeed + player.vx * 0.18;
+  shot.vy = shotDirection.y * shotSpeed + player.vy * 0.18;
+  shot.speed = Math.hypot(shot.vx, shot.vy);
+  shot.radius = 4.2;
+  shot.hitRadius = 6.8 + rapidRank * 0.4;
+  shot.life = Math.max(2.1, screenTravelLife);
+  shot.damage = rapidRank >= 3 ? 3 : 2;
+  shot.target = aim.target;
+  shot.age = 0;
+  shot.frameIndex = randomFrameIndex("antibody");
+  state.shots.push(shot);
 
   return shotDirection;
 }
@@ -2720,16 +2877,16 @@ function addParticleBurst(x, y, color, count = 12, power = 110) {
   for (let i = 0; i < count; i += 1) {
     const angle = rand(0, TAU);
     const speed = rand(power * 0.25, power);
-    state.particles.push({
-      x,
-      y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      radius: rand(1.4, 4.2),
-      life: rand(0.18, 0.6),
-      ttl: 0,
-      color,
-    });
+    const particle = particlePool.pop() || {};
+    particle.x = x;
+    particle.y = y;
+    particle.vx = Math.cos(angle) * speed;
+    particle.vy = Math.sin(angle) * speed;
+    particle.radius = rand(1.4, 4.2);
+    particle.life = rand(0.18, 0.6);
+    particle.ttl = 0;
+    particle.color = color;
+    state.particles.push(particle);
   }
 }
 
@@ -2815,10 +2972,14 @@ function triggerComplementPulse() {
   playPulseSfx();
   addParticleBurst(player.x, player.y, "#d9ffff", 30, 210);
 
-  for (const virus of [...state.viruses]) {
+  const virusCount = state.viruses.length;
+  for (let i = 0; i < virusCount; i += 1) {
+    const virus = state.viruses[i];
     if (virus.dead) continue;
-    const dist = distance(player, virus);
-    if (dist > radius + virus.radius) continue;
+    const maxDistance = radius + virus.radius;
+    const distSq = distanceSquared(player, virus);
+    if (distSq > maxDistance * maxDistance) continue;
+    const dist = Math.sqrt(distSq);
     virus.hp -= damage * getVirusDamageScale(virus);
     virus.hit = 0.2;
     if (virus.hp <= 0) destroyVirus(virus, "pulse");
@@ -2832,7 +2993,7 @@ function triggerComplementPulse() {
   }
 
   for (const platelet of state.platelets) {
-    if (distance(player, platelet) < radius + platelet.radius) {
+    if (isWithinDistance(player, platelet, radius + platelet.radius)) {
       const burstX = platelet.x;
       const burstY = platelet.y;
       platelet.x = -999;
@@ -3014,11 +3175,11 @@ function updateShots(dt) {
     if (isLockableVirus(shot.target)) {
       const dx = shot.target.x - shot.x;
       const dy = shot.target.y - shot.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const speed = Math.min(760, Math.max(620, Math.hypot(shot.vx, shot.vy) + 22));
+      const length = Math.sqrt(dx * dx + dy * dy) || 1;
+      shot.speed = Math.min(760, Math.max(620, (shot.speed ?? 620) + 22));
       const turn = clamp(dt * 9.5, 0, 0.2);
-      shot.vx = lerp(shot.vx, (dx / length) * speed, turn);
-      shot.vy = lerp(shot.vy, (dy / length) * speed, turn);
+      shot.vx = lerp(shot.vx, (dx / length) * shot.speed, turn);
+      shot.vy = lerp(shot.vy, (dy / length) * shot.speed, turn);
     }
 
     shot.x += shot.vx * dt;
@@ -3026,13 +3187,15 @@ function updateShots(dt) {
     shot.life -= dt;
     shot.age += dt;
   }
-  state.shots = state.shots.filter(
+  compactArray(
+    state.shots,
     (shot) =>
       shot.life > 0 &&
       shot.x < state.width + 100 &&
       shot.x > -100 &&
       shot.y > -100 &&
       shot.y < state.height + 100,
+    recycleShot,
   );
 }
 
@@ -3041,29 +3204,38 @@ function getInfluenzaCap() {
   return Math.min(30, 12 + Math.max(0, state.level - 4) * 3);
 }
 
-function getLiveInfluenzaViruses() {
-  return state.viruses.filter(
-    (virus) => virus.type === "influenza" && !virus.dead && virus.hp > 0,
-  );
+function isLiveInfluenzaVirus(virus) {
+  return virus.type === "influenza" && !virus.dead && virus.hp > 0;
+}
+
+function countLiveInfluenzaViruses() {
+  let count = 0;
+  for (const virus of state.viruses) {
+    if (isLiveInfluenzaVirus(virus)) count += 1;
+  }
+  return count;
 }
 
 function nudgeInfluenzaTowardNearest(virus, dt) {
   let nearest = null;
-  let nearestDist = Infinity;
+  let nearestDistSq = Infinity;
+  const maxDist = 290;
+  const maxDistSq = maxDist * maxDist;
 
   for (const other of state.viruses) {
-    if (other === virus || other.type !== "influenza" || other.dead || other.hp <= 0) continue;
-    const dist = distance(virus, other);
-    if (dist < nearestDist && dist < 290) {
+    if (other === virus || !isLiveInfluenzaVirus(other)) continue;
+    const distSq = distanceSquared(virus, other);
+    if (distSq < nearestDistSq && distSq < maxDistSq) {
       nearest = other;
-      nearestDist = dist;
+      nearestDistSq = distSq;
     }
   }
 
+  const nearestDist = Math.sqrt(nearestDistSq);
   if (!nearest || nearestDist <= 1) return;
 
   const spreadResistance = virus.spreadTimer > 0 ? 0.35 : 1;
-  const pull = 28 * spreadResistance * dt * (1 - clamp(nearestDist / 290, 0, 1));
+  const pull = 28 * spreadResistance * dt * (1 - clamp(nearestDist / maxDist, 0, 1));
   virus.x += ((nearest.x - virus.x) / nearestDist) * pull;
   virus.y += ((nearest.y - virus.y) / nearestDist) * pull;
 }
@@ -3110,18 +3282,21 @@ function spawnInfluenzaCopy(parent, partner, angleOffset) {
 }
 
 function replicateInfluenzaViruses() {
-  const influenza = getLiveInfluenzaViruses();
   const cap = getInfluenzaCap();
-  if (influenza.length < 2 || influenza.length + 2 > cap) return;
+  const influenzaCount = countLiveInfluenzaViruses();
+  if (influenzaCount < 2 || influenzaCount + 2 > cap) return;
 
-  for (let i = 0; i < influenza.length - 1; i += 1) {
-    const first = influenza[i];
+  for (let i = 0; i < state.viruses.length - 1; i += 1) {
+    const first = state.viruses[i];
+    if (!isLiveInfluenzaVirus(first)) continue;
     if (first.replicateCooldown > 0) continue;
 
-    for (let j = i + 1; j < influenza.length; j += 1) {
-      const second = influenza[j];
+    for (let j = i + 1; j < state.viruses.length; j += 1) {
+      const second = state.viruses[j];
+      if (!isLiveInfluenzaVirus(second)) continue;
       if (second.replicateCooldown > 0) continue;
-      if (distance(first, second) > (first.radius + second.radius) * 1.42) continue;
+      const replicateRadius = (first.radius + second.radius) * 1.42;
+      if (!isWithinDistance(first, second, replicateRadius)) continue;
 
       first.replicateCooldown = rand(1.45, 2.15);
       second.replicateCooldown = rand(1.45, 2.15);
@@ -3148,13 +3323,16 @@ function replicateInfluenzaViruses() {
 }
 
 function separateInfluenzaViruses(dt) {
-  const influenza = getLiveInfluenzaViruses();
-  for (let i = 0; i < influenza.length - 1; i += 1) {
-    const first = influenza[i];
-    for (let j = i + 1; j < influenza.length; j += 1) {
-      const second = influenza[j];
+  for (let i = 0; i < state.viruses.length - 1; i += 1) {
+    const first = state.viruses[i];
+    if (!isLiveInfluenzaVirus(first)) continue;
+    for (let j = i + 1; j < state.viruses.length; j += 1) {
+      const second = state.viruses[j];
+      if (!isLiveInfluenzaVirus(second)) continue;
       const minDist = (first.radius + second.radius) * 1.04;
-      const dist = distance(first, second);
+      const distSq = distanceSquared(first, second);
+      if (distSq >= minDist * minDist) continue;
+      const dist = Math.sqrt(distSq);
       if (dist <= 1 || dist >= minDist) continue;
 
       const push = (1 - dist / minDist) * 72 * dt;
@@ -3187,7 +3365,8 @@ function updateViruses(dt, worldSpeed) {
     }
   }
 
-  state.viruses = state.viruses.filter(
+  compactArray(
+    state.viruses,
     (virus) => !virus.dead && virus.x > -virus.radius - 80 && virus.hp > 0,
   );
   separateInfluenzaViruses(dt);
@@ -3201,7 +3380,7 @@ function updateRedCells(dt, worldSpeed) {
     cell.rotation += cell.spin * dt;
   }
 
-  state.redCells = state.redCells.filter((cell) => cell.x > -cell.radius * 2);
+  compactArray(state.redCells, (cell) => cell.x > -cell.radius * 2);
 }
 
 function updatePlatelets(dt, worldSpeed) {
@@ -3210,7 +3389,7 @@ function updatePlatelets(dt, worldSpeed) {
     platelet.angle += platelet.spin * dt;
   }
 
-  state.platelets = state.platelets.filter((platelet) => platelet.x > -platelet.radius * 3);
+  compactArray(state.platelets, (platelet) => platelet.x > -platelet.radius * 3);
 }
 
 function updateParticles(dt) {
@@ -3222,7 +3401,7 @@ function updateParticles(dt) {
     particle.vy *= Math.pow(0.03, dt);
   }
 
-  state.particles = state.particles.filter((particle) => particle.ttl < particle.life);
+  compactArray(state.particles, (particle) => particle.ttl < particle.life, recycleParticle);
 }
 
 function getVirusCollisionRadius(virus) {
@@ -3262,20 +3441,23 @@ function checkCollisions() {
   const player = state.player;
 
   for (const shot of state.shots) {
+    if (shot.life <= 0) continue;
     for (const virus of state.viruses) {
       if (virus.dead) continue;
-      if (distance(shot, virus) < (shot.hitRadius ?? shot.radius) + getVirusCollisionRadius(virus)) {
+      const collisionRadius = (shot.hitRadius ?? shot.radius) + getVirusCollisionRadius(virus);
+      if (isWithinDistance(shot, virus, collisionRadius)) {
         applyShotHit(virus, shot);
         break;
       }
     }
   }
 
-  state.shots = state.shots.filter((shot) => shot.life > 0);
+  compactArray(state.shots, (shot) => shot.life > 0, recycleShot);
 
   for (const virus of state.viruses) {
     if (virus.dead) continue;
-    if (distance(player, virus) < player.radius * 0.82 + getVirusCollisionRadius(virus) * 0.66) {
+    const collisionRadius = player.radius * 0.82 + getVirusCollisionRadius(virus) * 0.66;
+    if (isWithinDistance(player, virus, collisionRadius)) {
       hurtPlayer(
         isBossVirus(virus)
           ? virus.damage
@@ -3310,7 +3492,7 @@ function checkCollisions() {
   }
 
   for (const platelet of state.platelets) {
-    if (distance(player, platelet) < player.radius + platelet.radius * 0.86) {
+    if (isWithinDistance(player, platelet, player.radius + platelet.radius * 0.86)) {
       playPlateletBumpSfx();
       hurtPlayer(18, platelet.x, platelet.y, palette.platelet, false, false);
       platelet.x = -999;
@@ -3474,6 +3656,8 @@ function drawParallaxLayer(asset, speed, alpha = 1) {
   const scale = Math.max(width / image.width, height / image.height);
   const drawWidth = image.width * scale;
   const drawHeight = image.height * scale;
+  const scaledLayer = getScaledParallaxLayer(asset, drawWidth, drawHeight);
+  const layerSource = scaledLayer?.canvas || image;
   const y = (height - drawHeight) * 0.5;
   const scrollPosition = state.scroll * speed;
   const baseIndex = Math.floor(scrollPosition / drawWidth);
@@ -3490,10 +3674,10 @@ function drawParallaxLayer(asset, speed, alpha = 1) {
       ctx.save();
       ctx.translate(x + drawWidth, y);
       ctx.scale(-1, 1);
-      ctx.drawImage(image, 0, 0, drawWidth, drawHeight);
+      ctx.drawImage(layerSource, 0, 0, drawWidth, drawHeight);
       ctx.restore();
     } else {
-      ctx.drawImage(image, x, y, drawWidth, drawHeight);
+      ctx.drawImage(layerSource, x, y, drawWidth, drawHeight);
     }
   }
   ctx.restore();
@@ -4041,6 +4225,7 @@ function drawPlayer() {
 }
 
 function drawShots() {
+  const sprite = getCachedShotSprite();
   for (const shot of state.shots) {
     const angle = Math.atan2(shot.vy, shot.vx);
     const pulse = 1 + Math.sin((shot.age || 0) * 22) * 0.06;
@@ -4049,48 +4234,14 @@ function drawShots() {
     ctx.save();
     ctx.translate(shot.x, shot.y);
     ctx.rotate(angle);
-    ctx.shadowColor = palette.cyan;
-    ctx.shadowBlur = 8;
-    ctx.globalAlpha = 0.34;
-    ctx.strokeStyle = "rgba(96, 239, 255, 0.62)";
-    ctx.lineWidth = 2.2;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.moveTo(-24, 0);
-    ctx.lineTo(-9, 0);
-    ctx.stroke();
-
     ctx.scale(scale, scale);
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = "rgba(96, 239, 255, 0.88)";
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(-8, 0);
-    ctx.lineTo(2.5, 0);
-    ctx.moveTo(2.5, 0);
-    ctx.lineTo(12, -6);
-    ctx.moveTo(2.5, 0);
-    ctx.lineTo(12, 6);
-    ctx.stroke();
-
-    ctx.globalAlpha = 0.92;
-    ctx.strokeStyle = "rgba(176, 255, 255, 0.96)";
-    ctx.lineWidth = 2.8;
-    ctx.beginPath();
-    ctx.moveTo(-8, 0);
-    ctx.lineTo(2.5, 0);
-    ctx.moveTo(2.5, 0);
-    ctx.lineTo(12, -6);
-    ctx.moveTo(2.5, 0);
-    ctx.lineTo(12, 6);
-    ctx.stroke();
-
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#dfffff";
-    ctx.beginPath();
-    ctx.arc(12, -6, 1.5, 0, TAU);
-    ctx.arc(12, 6, 1.5, 0, TAU);
-    ctx.fill();
+    ctx.drawImage(
+      sprite.canvas,
+      -sprite.originX,
+      -sprite.originY,
+      sprite.logicalWidth,
+      sprite.logicalHeight,
+    );
     ctx.restore();
   }
 }
