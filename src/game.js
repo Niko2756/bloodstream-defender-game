@@ -70,6 +70,9 @@ const SFX_MUTE_STORAGE_KEY = "bloodstream-defender-sfx-muted";
 const GAME_OVER_INPUT_LOCK_DURATION = 1.15;
 const MAX_POOLED_SHOTS = 260;
 const MAX_POOLED_PARTICLES = 520;
+const MOBILE_SHOOT_SFX_INTERVAL = 95;
+const MOBILE_HIT_SFX_INTERVAL = 70;
+const MOBILE_POP_SFX_INTERVAL = 100;
 const SHOT_COLLISION_CELL_SIZE = 150;
 const SHOT_COLLISION_MAX_HIT_RADIUS = 14;
 const shotPool = [];
@@ -96,6 +99,9 @@ const mobileInput = {
   fire: false,
 };
 let lastTouchEndAt = 0;
+let lastShootSfxAt = 0;
+let lastAntibodyHitSfxAt = 0;
+let lastVirusPopSfxAt = 0;
 let lastBossHitSfxAt = 0;
 let lastUpgradeHoverSfxAt = 0;
 
@@ -1355,6 +1361,10 @@ function isTouchDevice() {
   return navigator.maxTouchPoints > 0 || window.matchMedia("(pointer: coarse)").matches;
 }
 
+function shouldUseMobileSfxBudget() {
+  return isTouchDevice();
+}
+
 function syncViewportMetrics() {
   const { width, height } = getViewportSize();
   const touchDevice = isTouchDevice();
@@ -1729,6 +1739,14 @@ function playNoise({ duration = 0.16, gain = 0.06, frequency = 900 }) {
 }
 
 function playShootSfx() {
+  if (shouldUseMobileSfxBudget()) {
+    const now = performance.now();
+    if (now - lastShootSfxAt < MOBILE_SHOOT_SFX_INTERVAL) return;
+    lastShootSfxAt = now;
+    playTone({ type: "triangle", start: 980, end: 540, duration: 0.07, gain: 0.09 });
+    return;
+  }
+
   playAssetSfx("antibodyShot", () => {
     playTone({ type: "triangle", start: 980, end: 520, duration: 0.1, gain: 0.12 });
     playTone({ type: "sine", start: 1520, end: 880, duration: 0.055, gain: 0.06 });
@@ -1762,6 +1780,14 @@ function playChemotaxisDashSfx(direction) {
 }
 
 function playVirusPopSfx() {
+  if (shouldUseMobileSfxBudget()) {
+    const now = performance.now();
+    if (now - lastVirusPopSfxAt < MOBILE_POP_SFX_INTERVAL) return;
+    lastVirusPopSfxAt = now;
+    playTone({ type: "sawtooth", start: 190, end: 72, duration: 0.1, gain: 0.08 });
+    return;
+  }
+
   playAssetSfx("virusPop", () => {
     playNoise({ duration: 0.22, gain: 0.18, frequency: 640 });
     playTone({ type: "sawtooth", start: 180, end: 58, duration: 0.18, gain: 0.12 });
@@ -1769,6 +1795,14 @@ function playVirusPopSfx() {
 }
 
 function playAntibodyHitSfx() {
+  if (shouldUseMobileSfxBudget()) {
+    const now = performance.now();
+    if (now - lastAntibodyHitSfxAt < MOBILE_HIT_SFX_INTERVAL) return;
+    lastAntibodyHitSfxAt = now;
+    playTone({ type: "triangle", start: 420, end: 680, duration: 0.07, gain: 0.055 });
+    return;
+  }
+
   playAssetSfx("antibodyHit", () => {
     playTone({ type: "triangle", start: 440, end: 720, duration: 0.09, gain: 0.08 });
   });
