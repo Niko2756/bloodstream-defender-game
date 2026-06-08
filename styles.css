@@ -3541,11 +3541,29 @@ button {
     padding: 16px;
   }
 
+  .level-complete-overlay {
+    align-content: start;
+    justify-items: center;
+    place-items: start center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-block: max(16px, env(safe-area-inset-top)) max(28px, env(safe-area-inset-bottom));
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .overlay h1 {
     font-size: clamp(32px, 7vw, 58px);
   }
 
-  .level-complete-panel,
+  .level-complete-panel {
+    width: min(420px, calc(100vw - 44px));
+    max-height: none;
+    padding: 20px;
+    touch-action: pan-y;
+  }
+
   .pause-panel {
     width: min(420px, calc(100vw - 44px));
     padding: 20px;
@@ -3771,11 +3789,29 @@ html.is-touch-device.is-landscape .overlay {
   padding: 16px;
 }
 
+html.is-touch-device.is-landscape .level-complete-overlay {
+  align-content: start;
+  justify-items: center;
+  place-items: start center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-block: max(16px, env(safe-area-inset-top)) max(28px, env(safe-area-inset-bottom));
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
 html.is-touch-device.is-landscape .overlay h1 {
   font-size: clamp(32px, 7vw, 58px);
 }
 
-html.is-touch-device.is-landscape .level-complete-panel,
+html.is-touch-device.is-landscape .level-complete-panel {
+  width: min(420px, calc(100vw - 44px));
+  max-height: none;
+  padding: 20px;
+  touch-action: pan-y;
+}
+
 html.is-touch-device.is-landscape .pause-panel {
   width: min(420px, calc(100vw - 44px));
   padding: 20px;
