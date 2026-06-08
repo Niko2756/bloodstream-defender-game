@@ -16,6 +16,7 @@
   </head>
   <body>
     <main class="game-shell" aria-label="Bloodstream Defender game">
+      <div id="phaserStage" class="phaser-stage" aria-hidden="true"></div>
       <canvas id="game" aria-label="Bloodstream Defender playfield"></canvas>
 
       <section class="hud" aria-live="polite">
@@ -203,6 +204,7 @@
       </section>
     </main>
 
-    <script src="./src/game.js?v=20260607-mobile-performance" type="module"></script>
+    <script src="./vendor/phaser.min.js"></script>
+    <script src="./src/game.js?v=20260608-phaser-webgl-polish" type="module"></script>
   </body>
 </html>

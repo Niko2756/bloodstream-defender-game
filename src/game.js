@@ -1,6 +1,7 @@
 const canvas = document.querySelector("#game");
 const ctx = canvas.getContext("2d");
 const gameShellEl = document.querySelector(".game-shell");
+const phaserStageEl = document.querySelector("#phaserStage");
 const scoreEl = document.querySelector("#score");
 const levelEl = document.querySelector("#level");
 const healthBar = document.querySelector("#healthBar");
@@ -74,6 +75,7 @@ const particlePool = [];
 const renderCache = {
   shotSprite: null,
 };
+let phaserRenderer = null;
 const keys = new Set();
 const pointer = {
   active: false,
@@ -746,6 +748,522 @@ function loadGameImage(src) {
   };
   asset.image.src = src;
   return asset;
+}
+
+const phaserTextureBySpriteGroup = {
+  whiteCell: "spriteAtlas",
+  greenVirus: "spriteAtlas",
+  purpleVirus: "spriteAtlas",
+  redCell: "spriteAtlas",
+  platelet: "spriteAtlas",
+  antibody: "spriteAtlas",
+  influenzaVirus: "influenzaSpriteSheet",
+  poxBoss: "poxBossSpriteSheet",
+  adenovirusMini: "adenovirusSpriteSheet",
+  filovirusBoss: "filovirusSpriteSheet",
+};
+
+function phaserFrameKey(group, index) {
+  return `${group}-${index}`;
+}
+
+function colorToNumber(color, fallback = 0xffffff) {
+  if (typeof color === "string" && color.startsWith("#")) {
+    const value = Number.parseInt(color.slice(1), 16);
+    return Number.isFinite(value) ? value : fallback;
+  }
+  return fallback;
+}
+
+function createPhaserRenderer() {
+  const Phaser = window.Phaser;
+  if (!Phaser || !phaserStageEl) return null;
+  const rendererHolder = { current: null };
+
+  class BloodstreamPhaserScene extends Phaser.Scene {
+    constructor() {
+      super("BloodstreamPlayfield");
+    }
+
+    preload() {
+      this.load.image("parallaxFar", "./assets/backgrounds/parallax/source/layer-00-far-vessel-wash.png");
+      this.load.image("parallaxCurrents", "./assets/backgrounds/parallax/processed/layer-01-mid-plasma-currents.png");
+      this.load.image("parallaxCells", "./assets/backgrounds/parallax/processed/layer-02-distant-red-cells.png");
+      this.load.image("parallaxBranches", "./assets/backgrounds/parallax/processed/layer-02b-branch-openings.png");
+      this.load.image("parallaxWalls", "./assets/backgrounds/parallax/processed/layer-03-foreground-vessel-walls.png");
+      this.load.image("parallaxFloaters", "./assets/backgrounds/parallax/processed/layer-04-foreground-floaters.png");
+      this.load.image("spriteAtlas", "./assets/sprites/processed/bloodstream-asset-atlas-transparent-no-despill.png");
+      this.load.image("influenzaSpriteSheet", "./assets/sprites/processed/influenza-virion-spritesheet.png");
+      this.load.image("poxBossSpriteSheet", "./assets/sprites/processed/pox-brick-boss-spritesheet.png");
+      this.load.image("adenovirusSpriteSheet", "./assets/sprites/processed/adenovirus-prism-spritesheet.png");
+      this.load.image("filovirusSpriteSheet", "./assets/sprites/processed/filovirus-ribbon-spritesheet.png");
+    }
+
+    create() {
+      rendererHolder.current?.attachScene(this);
+    }
+  }
+
+  rendererHolder.current = new BloodstreamPhaserRenderer(Phaser, BloodstreamPhaserScene);
+  return rendererHolder.current;
+}
+
+class BloodstreamPhaserRenderer {
+  constructor(Phaser, SceneClass) {
+    this.Phaser = Phaser;
+    this.ready = false;
+    this.scene = null;
+    this.width = state.width;
+    this.height = state.height;
+    this.syncId = 0;
+    this.redCellSprites = new Map();
+    this.plateletSprites = new Map();
+    this.virusSprites = new Map();
+    this.virusGlowSprites = new Map();
+    this.shotSprites = new Map();
+    this.game = new Phaser.Game({
+      type: Phaser.WEBGL,
+      parent: phaserStageEl,
+      width: this.width,
+      height: this.height,
+      backgroundColor: "#160612",
+      transparent: false,
+      audio: { noAudio: true },
+      render: {
+        antialias: true,
+        pixelArt: false,
+        roundPixels: false,
+        powerPreference: "high-performance",
+      },
+      scale: {
+        mode: Phaser.Scale.NONE,
+        width: this.width,
+        height: this.height,
+      },
+      scene: SceneClass,
+    });
+  }
+
+  attachScene(scene) {
+    this.scene = scene;
+    this.registerFrames();
+    this.createTextures();
+    this.createLayers();
+    this.ready = true;
+    gameShellEl?.classList.add("is-phaser-renderer");
+    this.resize(state.width, state.height);
+  }
+
+  registerFrames() {
+    for (const [group, frames] of Object.entries(spriteFrames)) {
+      const textureKey = phaserTextureBySpriteGroup[group];
+      const texture = this.scene.textures.get(textureKey);
+      if (!texture) continue;
+      frames.forEach((frame, index) => {
+        const key = phaserFrameKey(group, index);
+        if (!texture.has(key)) texture.add(key, 0, frame.x, frame.y, frame.w, frame.h);
+      });
+    }
+  }
+
+  createTextures() {
+    const shotGraphics = this.scene.add.graphics({ x: 0, y: 0 });
+    shotGraphics.lineStyle(2.2, 0x60efff, 0.34);
+    shotGraphics.beginPath();
+    shotGraphics.moveTo(6, 19);
+    shotGraphics.lineTo(21, 19);
+    shotGraphics.strokePath();
+    shotGraphics.lineStyle(6, 0x60efff, 0.5);
+    shotGraphics.beginPath();
+    shotGraphics.moveTo(22, 19);
+    shotGraphics.lineTo(32.5, 19);
+    shotGraphics.moveTo(32.5, 19);
+    shotGraphics.lineTo(42, 13);
+    shotGraphics.moveTo(32.5, 19);
+    shotGraphics.lineTo(42, 25);
+    shotGraphics.strokePath();
+    shotGraphics.lineStyle(2.8, 0xb0ffff, 0.92);
+    shotGraphics.beginPath();
+    shotGraphics.moveTo(22, 19);
+    shotGraphics.lineTo(32.5, 19);
+    shotGraphics.moveTo(32.5, 19);
+    shotGraphics.lineTo(42, 13);
+    shotGraphics.moveTo(32.5, 19);
+    shotGraphics.lineTo(42, 25);
+    shotGraphics.strokePath();
+    shotGraphics.fillStyle(0xdfffff, 1);
+    shotGraphics.fillCircle(42, 13, 1.5);
+    shotGraphics.fillCircle(42, 25, 1.5);
+    shotGraphics.generateTexture("antibodyProjectile", 68, 38);
+    shotGraphics.destroy();
+  }
+
+  createLayers() {
+    const { scene } = this;
+    scene.cameras.main.setRoundPixels(false);
+    this.background = scene.add.graphics().setDepth(0);
+    this.parallax = {
+      far: this.createParallaxLayer("parallaxFar", 1, 1),
+      currents: this.createParallaxLayer("parallaxCurrents", 2, 0.38),
+      branches: this.createParallaxLayer("parallaxBranches", 3, 0.24),
+      cells: this.createParallaxLayer("parallaxCells", 4, 0.34),
+      walls: this.createParallaxLayer("parallaxWalls", 90, 1),
+      floaters: this.createParallaxLayer("parallaxFloaters", 94, 0.28),
+    };
+    this.plasmaGraphics = scene.add.graphics().setDepth(5);
+    this.haloGraphics = scene.add.graphics().setDepth(28);
+    this.wakeGraphics = scene.add.graphics().setDepth(38);
+    this.abilityGraphics = scene.add.graphics().setDepth(39);
+    this.aimGraphics = scene.add.graphics().setDepth(47);
+    this.particleGraphics = scene.add.graphics().setDepth(82);
+    this.veilGraphics = scene.add.graphics().setDepth(95);
+    this.playerGlow = scene.add.image(0, 0, "spriteAtlas", phaserFrameKey("whiteCell", 0)).setDepth(40).setBlendMode(this.Phaser.BlendModes.ADD).setAlpha(0.24);
+    this.playerSprite = scene.add.image(0, 0, "spriteAtlas", phaserFrameKey("whiteCell", 0)).setDepth(45);
+    this.resize(this.width, this.height);
+  }
+
+  createParallaxLayer(texture, depth, alpha) {
+    return {
+      texture,
+      depth,
+      alpha,
+      drawWidth: this.width,
+      drawHeight: this.height,
+      y: 0,
+      sprites: [],
+    };
+  }
+
+  resize(width, height) {
+    if (!this.game || !this.scene) return;
+    this.width = Math.max(320, width);
+    this.height = Math.max(320, height);
+    this.game.scale.resize(this.width, this.height);
+    this.scene.cameras.main.setViewport(0, 0, this.width, this.height);
+    this.updateParallaxSizes();
+    this.drawStaticVeil();
+  }
+
+  updateParallaxSizes() {
+    if (!this.parallax) return;
+    for (const layer of Object.values(this.parallax)) {
+      const source = this.scene.textures.get(layer.texture)?.getSourceImage();
+      const sourceWidth = source?.width || this.width;
+      const sourceHeight = source?.height || this.height;
+      const scale = Math.max(this.width / sourceWidth, this.height / sourceHeight);
+      const neededSprites = Math.ceil(this.width / Math.max(1, sourceWidth * scale)) + 3;
+
+      layer.drawWidth = sourceWidth * scale;
+      layer.drawHeight = sourceHeight * scale;
+      layer.y = (this.height - layer.drawHeight) * 0.5;
+
+      while (layer.sprites.length < neededSprites) {
+        const sprite = this.scene.add.image(0, 0, layer.texture);
+        sprite.setOrigin(0.5, 0);
+        sprite.setDepth(layer.depth);
+        sprite.setAlpha(layer.alpha);
+        layer.sprites.push(sprite);
+      }
+
+      for (const sprite of layer.sprites) {
+        sprite.setDisplaySize(layer.drawWidth, layer.drawHeight);
+        sprite.setDepth(layer.depth);
+        sprite.setAlpha(layer.alpha);
+      }
+    }
+  }
+
+  drawStaticVeil() {
+    if (!this.veilGraphics) return;
+    this.veilGraphics.clear();
+    this.veilGraphics.fillStyle(0x14030d, 0.14);
+    this.veilGraphics.fillRect(0, 0, this.width, this.height * 0.22);
+    this.veilGraphics.fillRect(0, this.height * 0.78, this.width, this.height * 0.22);
+    this.veilGraphics.fillStyle(0x09020a, 0.22);
+    this.veilGraphics.fillRect(0, 0, this.width, this.height);
+  }
+
+  sync() {
+    if (!this.ready || !this.scene) return;
+    this.syncId += 1;
+    this.syncBackground();
+    this.syncWorldObjects();
+    this.syncPlayer();
+    this.syncShots();
+    this.syncParticles();
+    this.cleanupMaps();
+  }
+
+  syncBackground() {
+    this.background.clear();
+    this.background.fillGradientStyle(0x2a0718, 0x42101f, 0x6f1d27, 0x270716, 1);
+    this.background.fillRect(0, 0, this.width, this.height);
+
+    const layerSpeeds = {
+      far: 0.12,
+      currents: 0.28,
+      branches: 0.38,
+      cells: 0.52,
+      walls: 0.96,
+      floaters: 1.22,
+    };
+    for (const [key, layer] of Object.entries(this.parallax)) {
+      this.syncParallaxLayer(layer, layerSpeeds[key] ?? 0.5);
+    }
+
+    this.plasmaGraphics.clear();
+    for (const dot of state.plasma) {
+      this.plasmaGraphics.fillStyle(0xffc39e, dot.alpha);
+      this.plasmaGraphics.fillCircle(dot.x, dot.y, dot.radius);
+    }
+  }
+
+  syncWorldObjects() {
+    this.haloGraphics.clear();
+    for (const cell of state.redCells) {
+      const frame = phaserFrameKey("redCell", (cell.frameIndex ?? 0) % spriteFrames.redCell.length);
+      const sprite = this.getImage(this.redCellSprites, cell, "spriteAtlas", frame);
+      const distant = cell.depth < 0.68;
+      sprite.setDepth(distant ? 18 : 58);
+      sprite.setPosition(cell.x, cell.y);
+      sprite.setRotation(cell.rotation);
+      sprite.setAlpha(distant ? 0.38 : 0.88);
+      sprite.setDisplaySize(cell.radius * 1.86 * (spriteFrames.redCell[(cell.frameIndex ?? 0) % spriteFrames.redCell.length].w / spriteFrames.redCell[(cell.frameIndex ?? 0) % spriteFrames.redCell.length].h), cell.radius * 1.86);
+      cell._phaserSyncId = this.syncId;
+    }
+
+    for (const platelet of state.platelets) {
+      const frameIndex = (platelet.frameIndex ?? 0) % spriteFrames.platelet.length;
+      const frame = phaserFrameKey("platelet", frameIndex);
+      const sprite = this.getImage(this.plateletSprites, platelet, "spriteAtlas", frame);
+      const targetHeight = platelet.radius * 2.55 * (1 + Math.sin(state.time * 2.4 + platelet.angle) * 0.025);
+      const frameData = spriteFrames.platelet[frameIndex];
+      sprite.setDepth(62);
+      sprite.setPosition(platelet.x, platelet.y);
+      sprite.setRotation(platelet.angle);
+      sprite.setAlpha(0.94);
+      sprite.setDisplaySize(targetHeight * (frameData.w / frameData.h), targetHeight);
+      platelet._phaserSyncId = this.syncId;
+    }
+
+    for (const virus of state.viruses) {
+      if (virus.dead) continue;
+      this.syncVirus(virus);
+      virus._phaserSyncId = this.syncId;
+    }
+  }
+
+  syncVirus(virus) {
+    const group = virus.spriteGroup || "greenVirus";
+    const frames = spriteFrames[group] || spriteFrames.greenVirus;
+    const frameIndex = (virus.frameIndex ?? 0) % frames.length;
+    const textureKey = phaserTextureBySpriteGroup[group] || "spriteAtlas";
+    const frame = phaserFrameKey(group, frameIndex);
+    const frameData = frames[frameIndex];
+    const targetHeight = isBossVirus(virus)
+      ? virus.radius * (virus.type === "filovirusBoss" ? 2.48 : 2.74)
+      : virus.radius * 2.92;
+    const hitPulse = virus.hit > 0 ? 1 + Math.sin(state.time * 60) * 0.06 : 1;
+    const alpha = virus.hit > 0 ? 0.72 + Math.sin(state.time * 60) * 0.2 : 1;
+    const depth = isBossVirus(virus) ? 66 : 60;
+    const sprite = this.getImage(this.virusSprites, virus, textureKey, frame);
+    const glow = this.getImage(this.virusGlowSprites, virus, textureKey, frame);
+    const width = targetHeight * (frameData.w / frameData.h) * hitPulse;
+    const height = targetHeight * hitPulse;
+
+    if (virus.type !== "influenza" && !isBossVirus(virus)) {
+      const haloRadius = virus.radius * (virus.type === "fragment" ? 1.28 : 1.34);
+      this.haloGraphics.fillStyle(0x0e010a, 0.38);
+      this.haloGraphics.fillCircle(virus.x, virus.y, haloRadius);
+      this.haloGraphics.lineStyle(virus.type === "budding" ? 3 : 2, virus.type === "budding" ? 0xffe27e : 0xfff4ee, virus.type === "budding" ? 0.7 : 0.22);
+      this.haloGraphics.strokeCircle(virus.x, virus.y, haloRadius);
+    }
+
+    glow.setDepth(depth - 1);
+    glow.setPosition(virus.x, virus.y);
+    glow.setRotation(virus.angle);
+    glow.setAlpha(isBossVirus(virus) ? 0.28 : 0.2);
+    glow.setTint(colorToNumber(virus.color, 0x60efff));
+    glow.setBlendMode(this.Phaser.BlendModes.ADD);
+    glow.setDisplaySize(width * 1.12, height * 1.12);
+
+    sprite.setDepth(depth);
+    sprite.setPosition(virus.x, virus.y);
+    sprite.setRotation(virus.angle);
+    sprite.setAlpha(alpha);
+    sprite.clearTint();
+    sprite.setDisplaySize(width, height);
+
+    if (virus.type === "adenovirusMini" && !virus.shieldOpen) {
+      this.haloGraphics.lineStyle(3, 0x87faff, 0.58 + Math.sin(state.time * 8) * 0.08);
+      this.haloGraphics.strokeCircle(virus.x, virus.y, virus.radius * 1.56);
+    }
+  }
+
+  syncPlayer() {
+    const player = state.player;
+    if (!player || !this.playerSprite) return;
+
+    const hurtPulse = player.hurtTimer > 0 ? Math.sin(state.time * 50) * 0.12 : 0;
+    const speed = Math.hypot(player.vx, player.vy);
+    const swimPulseRate = 3.2 + clamp(speed / 170, 0, 1.8);
+    const poseStrength = clamp(Math.abs(player.horizontalPose ?? 0), 0, 1);
+    const swimFrame = poseStrength > 0.22 ? 1 : (player.spriteFrame ?? 0) % spriteFrames.whiteCell.length;
+    const frame = phaserFrameKey("whiteCell", swimFrame);
+    const frameData = spriteFrames.whiteCell[swimFrame];
+    const bodyAngle =
+      Math.sin(state.time * 2.8) * 0.075 +
+      player.vy * 0.0008 +
+      (player.horizontalPose ?? 0) * 0.055;
+    const targetHeight =
+      player.radius *
+      3.55 *
+      (1 + Math.abs(hurtPulse) * 0.42 + Math.sin(state.time * swimPulseRate) * 0.014);
+    const targetWidth = targetHeight * (frameData.w / frameData.h) * (1 + poseStrength * 0.12);
+    const finalHeight = targetHeight * (1 - poseStrength * 0.035);
+    const flip = (player.horizontalPose ?? 0) < -0.16 ? -1 : 1;
+
+    this.drawPlayerEffects(player, poseStrength);
+
+    this.playerGlow.setTexture("spriteAtlas", frame);
+    this.playerGlow.setPosition(player.x, player.y);
+    this.playerGlow.setRotation(bodyAngle);
+    this.playerGlow.setAlpha(player.hurtTimer > 0 ? 0.36 : 0.24);
+    this.playerGlow.setTint(player.hurtTimer > 0 ? 0xff7378 : 0x60efff);
+    this.playerGlow.setDisplaySize(targetWidth * 1.12, finalHeight * 1.12);
+    this.playerGlow.setFlipX(flip < 0);
+
+    this.playerSprite.setTexture("spriteAtlas", frame);
+    this.playerSprite.setPosition(player.x, player.y);
+    this.playerSprite.setRotation(bodyAngle);
+    this.playerSprite.setDisplaySize(targetWidth, finalHeight);
+    this.playerSprite.setFlipX(flip < 0);
+    this.playerSprite.setAlpha(1);
+    this.playerSprite.clearTint();
+  }
+
+  drawPlayerEffects(player, poseStrength) {
+    this.wakeGraphics.clear();
+    this.abilityGraphics.clear();
+    this.aimGraphics.clear();
+
+    if (poseStrength > 0.08) {
+      const direction = player.horizontalPose < 0 ? -1 : 1;
+      const flicker = 0.72 + Math.sin(state.time * 18) * 0.14;
+      for (let i = 0; i < 4; i += 1) {
+        const y = player.y + (i - 1.5) * player.radius * 0.28 + Math.sin(state.time * 8 + i) * 1.6;
+        const start = player.x - direction * player.radius * (1.05 + i * 0.12);
+        const end = player.x - direction * player.radius * (1.86 + i * 0.2);
+        this.wakeGraphics.lineStyle(2.4 - i * 0.26, i % 2 === 0 ? 0xa6fff8 : 0xfff4ee, poseStrength * flicker * (i % 2 === 0 ? 0.46 : 0.26));
+        this.wakeGraphics.beginPath();
+        this.wakeGraphics.moveTo(start, y);
+        this.wakeGraphics.lineTo(end, player.y + (y - player.y) * 0.72);
+        this.wakeGraphics.strokePath();
+      }
+    }
+
+    if (state.pulseTimer > 0) {
+      const progress = 1 - state.pulseTimer / 0.38;
+      const radius = 72 + progress * (150 + state.upgrades.pulse * 32);
+      this.abilityGraphics.lineStyle(5 - progress * 2.5, 0xc2ffff, 1 - progress);
+      this.abilityGraphics.strokeCircle(player.x, player.y, radius);
+      this.abilityGraphics.fillStyle(0x66f2ff, (1 - progress) * 0.18);
+      this.abilityGraphics.fillCircle(player.x, player.y, radius * 0.62);
+    }
+
+    if (state.dashTimer > 0) {
+      const alpha = (state.dashTimer / 0.22) * 0.58;
+      this.abilityGraphics.lineStyle(3.4, 0xd2fffa, alpha);
+      for (let i = 0; i < 5; i += 1) {
+        const y = player.y + (i - 2) * player.radius * 0.22;
+        this.abilityGraphics.beginPath();
+        this.abilityGraphics.moveTo(player.x - player.radius * (1.1 + i * 0.08), y);
+        this.abilityGraphics.lineTo(player.x - player.radius * (2.8 + i * 0.14), player.y + (y - player.y) * 0.6);
+        this.abilityGraphics.strokePath();
+      }
+    }
+
+  }
+
+  syncParallaxLayer(layer, speed) {
+    const scrollPosition = state.scroll * speed;
+    const drawWidth = Math.max(1, layer.drawWidth);
+    const baseIndex = Math.floor(scrollPosition / drawWidth);
+    const localOffset = -(scrollPosition - baseIndex * drawWidth);
+    const tileCount = Math.ceil(this.width / drawWidth) + 3;
+
+    for (let tile = -1; tile < tileCount; tile += 1) {
+      const sprite = layer.sprites[tile + 1];
+      if (!sprite) continue;
+      const x = localOffset + tile * drawWidth;
+      sprite.setVisible(true);
+      sprite.setPosition(x + drawWidth * 0.5, layer.y);
+      sprite.setDisplaySize(layer.drawWidth, layer.drawHeight);
+      sprite.setFlipX(Math.abs((baseIndex + tile) % 2) === 1);
+    }
+
+    for (let index = tileCount + 1; index < layer.sprites.length; index += 1) {
+      layer.sprites[index].setVisible(false);
+    }
+  }
+
+  syncShots() {
+    for (const shot of state.shots) {
+      const sprite = this.getImage(this.shotSprites, shot, "antibodyProjectile");
+      const angle = Math.atan2(shot.vy, shot.vx);
+      const pulse = 1 + Math.sin((shot.age || 0) * 22) * 0.06;
+      sprite.setDepth(74);
+      sprite.setPosition(shot.x, shot.y);
+      sprite.setRotation(angle);
+      sprite.setScale(pulse * 1.18);
+      sprite.setAlpha(1);
+      shot._phaserSyncId = this.syncId;
+    }
+  }
+
+  syncParticles() {
+    this.particleGraphics.clear();
+    for (const particle of state.particles) {
+      const progress = particle.ttl / particle.life;
+      this.particleGraphics.fillStyle(colorToNumber(particle.color, 0xffffff), 1 - progress);
+      this.particleGraphics.fillCircle(
+        particle.x,
+        particle.y,
+        particle.radius * (1 - progress * 0.45),
+      );
+    }
+  }
+
+  getImage(map, key, texture, frame = undefined) {
+    let image = map.get(key);
+    if (!image) {
+      image = this.scene.add.image(0, 0, texture, frame);
+      image.setOrigin(0.5);
+      map.set(key, image);
+    } else if (frame !== undefined) {
+      image.setTexture(texture, frame);
+    } else {
+      image.setTexture(texture);
+    }
+    image.setVisible(true);
+    return image;
+  }
+
+  cleanupMaps() {
+    this.cleanupMap(this.redCellSprites);
+    this.cleanupMap(this.plateletSprites);
+    this.cleanupMap(this.virusSprites);
+    this.cleanupMap(this.virusGlowSprites);
+    this.cleanupMap(this.shotSprites);
+  }
+
+  cleanupMap(map) {
+    for (const [item, image] of map) {
+      if (item._phaserSyncId === this.syncId) continue;
+      image.destroy();
+      map.delete(item);
+    }
+  }
 }
 
 function rand(min, max) {
@@ -1539,6 +2057,7 @@ function resize() {
   }
 
   seedPlasma();
+  phaserRenderer?.resize(state.width, state.height);
 }
 
 function seedPlasma() {
@@ -3554,6 +4073,15 @@ function endGame() {
   }, GAME_OVER_INPUT_LOCK_DURATION * 1000);
 }
 
+function renderPlayfield() {
+  if (phaserRenderer?.ready) {
+    phaserRenderer.sync();
+    return;
+  }
+
+  draw();
+}
+
 function draw() {
   ctx.save();
   if (state.shake > 0) {
@@ -4132,18 +4660,6 @@ function drawPlayer() {
   );
 
   if (spriteDrawn) {
-    ctx.save();
-    ctx.translate(player.x, player.y);
-    ctx.rotate(aimAngle);
-    ctx.shadowColor = palette.cyan;
-    ctx.shadowBlur = 14;
-    ctx.strokeStyle = "rgba(170, 255, 255, 0.82)";
-    ctx.lineWidth = 2.6;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    ctx.arc(player.radius * 1.18, 0, 6 + Math.sin(state.time * 8) * 0.9, -0.75, 0.75);
-    ctx.stroke();
-    ctx.restore();
     return;
   }
 
@@ -4215,12 +4731,6 @@ function drawPlayer() {
   ctx.arc(9.5, 6.8, 1.2, 0, TAU);
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(96, 239, 255, 0.7)";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(player.radius * 0.9, 0, 10 + Math.sin(state.time * 8) * 1.4, -0.78, 0.78);
-  ctx.stroke();
-
   ctx.restore();
 }
 
@@ -4265,7 +4775,7 @@ function frame(now) {
     update(dt);
   }
   updateAudioScene(dt);
-  draw();
+  renderPlayfield();
   requestAnimationFrame(frame);
 }
 
@@ -4431,6 +4941,7 @@ for (const card of upgradeCards) {
 }
 bindMobileControls();
 
+phaserRenderer = createPhaserRenderer();
 resize();
 renderUpgradeCards();
 updateMuteButtons();
