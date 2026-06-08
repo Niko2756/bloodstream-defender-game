@@ -70,12 +70,18 @@ const SFX_MUTE_STORAGE_KEY = "bloodstream-defender-sfx-muted";
 const GAME_OVER_INPUT_LOCK_DURATION = 1.15;
 const MAX_POOLED_SHOTS = 260;
 const MAX_POOLED_PARTICLES = 520;
+const SHOT_COLLISION_CELL_SIZE = 150;
+const SHOT_COLLISION_MAX_HIT_RADIUS = 14;
 const shotPool = [];
 const particlePool = [];
+const shotCollisionBuckets = new Map();
+const shotCollisionCandidates = [];
 const renderCache = {
   shotSprite: null,
 };
 let phaserRenderer = null;
+let mobilePerformanceMode = false;
+let shotCollisionQueryId = 0;
 const keys = new Set();
 const pointer = {
   active: false,
@@ -775,6 +781,10 @@ function colorToNumber(color, fallback = 0xffffff) {
   return fallback;
 }
 
+function shouldUseMobileRenderMode() {
+  return mobilePerformanceMode || isTouchDevice();
+}
+
 function createPhaserRenderer() {
   const Phaser = window.Phaser;
   if (!Phaser || !phaserStageEl) return null;
@@ -915,6 +925,7 @@ class BloodstreamPhaserRenderer {
     this.wakeGraphics = scene.add.graphics().setDepth(38);
     this.abilityGraphics = scene.add.graphics().setDepth(39);
     this.aimGraphics = scene.add.graphics().setDepth(47);
+    this.shotGraphics = scene.add.graphics().setDepth(74);
     this.particleGraphics = scene.add.graphics().setDepth(82);
     this.veilGraphics = scene.add.graphics().setDepth(95);
     this.playerGlow = scene.add.image(0, 0, "spriteAtlas", phaserFrameKey("whiteCell", 0)).setDepth(40).setBlendMode(this.Phaser.BlendModes.ADD).setAlpha(0.24);
@@ -1208,6 +1219,12 @@ class BloodstreamPhaserRenderer {
   }
 
   syncShots() {
+    if (shouldUseMobileRenderMode()) {
+      this.syncMobileShots();
+      return;
+    }
+
+    this.shotGraphics.clear();
     for (const shot of state.shots) {
       const sprite = this.getImage(this.shotSprites, shot, "antibodyProjectile");
       const angle = Math.atan2(shot.vy, shot.vx);
@@ -1221,9 +1238,61 @@ class BloodstreamPhaserRenderer {
     }
   }
 
+  syncMobileShots() {
+    this.shotGraphics.clear();
+    if (state.shots.length === 0) return;
+
+    this.shotGraphics.lineStyle(5.2, 0x60efff, 0.24);
+    this.shotGraphics.beginPath();
+    for (const shot of state.shots) {
+      this.traceMobileShot(shot);
+    }
+    this.shotGraphics.strokePath();
+
+    this.shotGraphics.lineStyle(2.4, 0xdfffff, 0.9);
+    this.shotGraphics.beginPath();
+    for (const shot of state.shots) {
+      this.traceMobileShot(shot);
+      shot._phaserSyncId = this.syncId;
+    }
+    this.shotGraphics.strokePath();
+  }
+
+  traceMobileShot(shot) {
+    const ux = shot.renderUx || 1;
+    const uy = shot.renderUy || 0;
+    const px = -uy;
+    const py = ux;
+    const stemBack = 12;
+    const stemForward = 8;
+    const branchForward = 20;
+    const branchSpread = 5.2;
+    const baseX = shot.x - ux * stemBack;
+    const baseY = shot.y - uy * stemBack;
+    const splitX = shot.x + ux * stemForward;
+    const splitY = shot.y + uy * stemForward;
+    const tipX = shot.x + ux * branchForward;
+    const tipY = shot.y + uy * branchForward;
+
+    this.shotGraphics.moveTo(baseX, baseY);
+    this.shotGraphics.lineTo(splitX, splitY);
+    this.shotGraphics.moveTo(splitX, splitY);
+    this.shotGraphics.lineTo(tipX + px * branchSpread, tipY + py * branchSpread);
+    this.shotGraphics.moveTo(splitX, splitY);
+    this.shotGraphics.lineTo(tipX - px * branchSpread, tipY - py * branchSpread);
+  }
+
   syncParticles() {
     this.particleGraphics.clear();
-    for (const particle of state.particles) {
+    const mobileMode = shouldUseMobileRenderMode();
+    const maxVisibleParticles = mobileMode ? 130 : state.particles.length;
+    const particleStride =
+      state.particles.length > maxVisibleParticles
+        ? Math.ceil(state.particles.length / maxVisibleParticles)
+        : 1;
+
+    for (let index = 0; index < state.particles.length; index += particleStride) {
+      const particle = state.particles[index];
       const progress = particle.ttl / particle.life;
       this.particleGraphics.fillStyle(colorToNumber(particle.color, 0xffffff), 1 - progress);
       this.particleGraphics.fillCircle(
@@ -1297,6 +1366,7 @@ function syncViewportMetrics() {
   document.documentElement.classList.toggle("is-landscape", touchDevice && landscape);
   document.documentElement.classList.toggle("is-portrait", touchDevice && !landscape);
   document.documentElement.classList.toggle("is-short-landscape", touchDevice && landscape && height <= 430);
+  mobilePerformanceMode = touchDevice;
 }
 
 async function requestMobileFullscreen() {
@@ -2433,8 +2503,13 @@ function updateMobileJoystick(event) {
 }
 
 function stopMobileControlEvent(event) {
-  event.preventDefault();
+  if (event.cancelable) event.preventDefault();
   event.stopPropagation();
+}
+
+function blockMobileControlGesture(event) {
+  if (!isTouchDevice()) return;
+  stopMobileControlEvent(event);
 }
 
 function isGameplayTouchReady() {
@@ -2442,6 +2517,15 @@ function isGameplayTouchReady() {
 }
 
 function bindMobileControls() {
+  if (mobileControlsEl) {
+    for (const eventName of ["touchend", "touchcancel", "click", "dblclick", "contextmenu"]) {
+      mobileControlsEl.addEventListener(eventName, blockMobileControlGesture, {
+        capture: true,
+        passive: false,
+      });
+    }
+  }
+
   if (mobileJoystickEl) {
     mobileJoystickEl.addEventListener("pointerdown", (event) => {
       stopMobileControlEvent(event);
@@ -3355,6 +3439,8 @@ function addAntibodyShot(player, aim, dx, dy, angleOffset = 0) {
   shot.damage = rapidRank >= 3 ? 3 : 2;
   shot.target = aim.target;
   shot.age = 0;
+  shot.renderUx = shot.vx / Math.max(1, shot.speed);
+  shot.renderUy = shot.vy / Math.max(1, shot.speed);
   shot.frameIndex = randomFrameIndex("antibody");
   state.shots.push(shot);
 
@@ -3705,6 +3791,12 @@ function updateShots(dt) {
     shot.y += shot.vy * dt;
     shot.life -= dt;
     shot.age += dt;
+    const speedSq = shot.vx * shot.vx + shot.vy * shot.vy;
+    if (speedSq > 0.0001) {
+      const invSpeed = 1 / Math.sqrt(speedSq);
+      shot.renderUx = shot.vx * invSpeed;
+      shot.renderUy = shot.vy * invSpeed;
+    }
   }
   compactArray(
     state.shots,
@@ -3956,22 +4048,95 @@ function applyShotHit(virus, shot) {
   }
 }
 
-function checkCollisions() {
-  const player = state.player;
+function getShotCollisionCellKey(cellX, cellY) {
+  return `${cellX}:${cellY}`;
+}
 
-  for (const shot of state.shots) {
-    if (shot.life <= 0) continue;
-    for (const virus of state.viruses) {
-      if (virus.dead) continue;
-      const collisionRadius = (shot.hitRadius ?? shot.radius) + getVirusCollisionRadius(virus);
-      if (isWithinDistance(shot, virus, collisionRadius)) {
-        applyShotHit(virus, shot);
-        break;
+function addVirusToShotCollisionBucket(cellX, cellY, virus) {
+  const key = getShotCollisionCellKey(cellX, cellY);
+  let bucket = shotCollisionBuckets.get(key);
+  if (!bucket) {
+    bucket = [];
+    shotCollisionBuckets.set(key, bucket);
+  }
+  bucket.push(virus);
+}
+
+function buildShotCollisionBuckets() {
+  shotCollisionBuckets.clear();
+  const cellSize = SHOT_COLLISION_CELL_SIZE;
+  for (const virus of state.viruses) {
+    if (virus.dead) continue;
+    const radius = getVirusCollisionRadius(virus) + SHOT_COLLISION_MAX_HIT_RADIUS;
+    const minCellX = Math.floor((virus.x - radius) / cellSize);
+    const maxCellX = Math.floor((virus.x + radius) / cellSize);
+    const minCellY = Math.floor((virus.y - radius) / cellSize);
+    const maxCellY = Math.floor((virus.y + radius) / cellSize);
+
+    for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
+      for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
+        addVirusToShotCollisionBucket(cellX, cellY, virus);
+      }
+    }
+  }
+}
+
+function getShotCollisionCandidates(shot) {
+  shotCollisionCandidates.length = 0;
+  shotCollisionQueryId += 1;
+
+  const cellSize = SHOT_COLLISION_CELL_SIZE;
+  const cellX = Math.floor(shot.x / cellSize);
+  const cellY = Math.floor(shot.y / cellSize);
+
+  for (let y = cellY - 1; y <= cellY + 1; y += 1) {
+    for (let x = cellX - 1; x <= cellX + 1; x += 1) {
+      const bucket = shotCollisionBuckets.get(getShotCollisionCellKey(x, y));
+      if (!bucket) continue;
+      for (const virus of bucket) {
+        if (virus._shotCollisionQueryId === shotCollisionQueryId) continue;
+        virus._shotCollisionQueryId = shotCollisionQueryId;
+        shotCollisionCandidates.push(virus);
       }
     }
   }
 
+  return shotCollisionCandidates;
+}
+
+function tryShotVirusCollision(shot, virus) {
+  if (!virus || virus.dead || shot.life <= 0) return false;
+  const collisionRadius = (shot.hitRadius ?? shot.radius) + getVirusCollisionRadius(virus);
+  const dx = shot.x - virus.x;
+  if (Math.abs(dx) > collisionRadius) return false;
+  const dy = shot.y - virus.y;
+  if (Math.abs(dy) > collisionRadius) return false;
+  if (dx * dx + dy * dy > collisionRadius * collisionRadius) return false;
+  applyShotHit(virus, shot);
+  return true;
+}
+
+function checkShotCollisions() {
+  if (state.shots.length === 0 || state.viruses.length === 0) return;
+  buildShotCollisionBuckets();
+  for (const shot of state.shots) {
+    if (shot.life <= 0) continue;
+    if (isLockableVirus(shot.target) && tryShotVirusCollision(shot, shot.target)) continue;
+
+    const candidates = getShotCollisionCandidates(shot);
+    for (const virus of candidates) {
+      if (virus === shot.target) continue;
+      if (tryShotVirusCollision(shot, virus)) break;
+    }
+  }
+
   compactArray(state.shots, (shot) => shot.life > 0, recycleShot);
+}
+
+function checkCollisions() {
+  const player = state.player;
+
+  checkShotCollisions();
 
   for (const virus of state.viruses) {
     if (virus.dead) continue;
@@ -4735,6 +4900,11 @@ function drawPlayer() {
 }
 
 function drawShots() {
+  if (shouldUseMobileRenderMode()) {
+    drawMobileShots();
+    return;
+  }
+
   const sprite = getCachedShotSprite();
   for (const shot of state.shots) {
     const angle = Math.atan2(shot.vy, shot.vx);
@@ -4756,8 +4926,61 @@ function drawShots() {
   }
 }
 
+function drawMobileShots() {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.strokeStyle = "rgba(96, 239, 255, 0.24)";
+  ctx.lineWidth = 5.2;
+  ctx.beginPath();
+  for (const shot of state.shots) {
+    traceCanvasMobileShot(shot);
+  }
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(223, 255, 255, 0.9)";
+  ctx.lineWidth = 2.4;
+  ctx.beginPath();
+  for (const shot of state.shots) {
+    traceCanvasMobileShot(shot);
+  }
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function traceCanvasMobileShot(shot) {
+  const ux = shot.renderUx || 1;
+  const uy = shot.renderUy || 0;
+  const px = -uy;
+  const py = ux;
+  const baseX = shot.x - ux * 12;
+  const baseY = shot.y - uy * 12;
+  const splitX = shot.x + ux * 8;
+  const splitY = shot.y + uy * 8;
+  const tipX = shot.x + ux * 20;
+  const tipY = shot.y + uy * 20;
+  const spread = 5.2;
+
+  ctx.moveTo(baseX, baseY);
+  ctx.lineTo(splitX, splitY);
+  ctx.moveTo(splitX, splitY);
+  ctx.lineTo(tipX + px * spread, tipY + py * spread);
+  ctx.moveTo(splitX, splitY);
+  ctx.lineTo(tipX - px * spread, tipY - py * spread);
+}
+
 function drawParticles() {
-  for (const particle of state.particles) {
+  const mobileMode = shouldUseMobileRenderMode();
+  const maxVisibleParticles = mobileMode ? 130 : state.particles.length;
+  const particleStride =
+    state.particles.length > maxVisibleParticles
+      ? Math.ceil(state.particles.length / maxVisibleParticles)
+      : 1;
+
+  for (let index = 0; index < state.particles.length; index += particleStride) {
+    const particle = state.particles[index];
     const progress = particle.ttl / particle.life;
     ctx.globalAlpha = 1 - progress;
     ctx.fillStyle = particle.color;

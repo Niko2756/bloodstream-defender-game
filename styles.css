@@ -3928,3 +3928,146 @@ html.is-touch-device.is-portrait .orientation-prompt {
 html.is-touch-device.is-portrait .mobile-controls {
   display: none !important;
 }
+
+html.is-touch-device,
+html.is-touch-device body,
+html.is-touch-device .game-shell,
+html.is-touch-device #game,
+html.is-touch-device .phaser-stage,
+html.is-touch-device .mobile-controls,
+html.is-touch-device .mobile-joystick,
+html.is-touch-device .mobile-action {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.is-touch-device .mobile-action > * {
+  pointer-events: none;
+}
+
+html.is-touch-device.is-landscape .mission-panel,
+html.is-touch-device.is-short-landscape .mission-panel {
+  display: none !important;
+}
+
+@media (pointer: coarse) and (orientation: landscape) {
+  .mission-panel {
+    display: none !important;
+  }
+}
+
+html.is-touch-device .game-over-overlay {
+  align-content: start;
+  justify-items: center;
+  place-items: start center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding:
+    max(8px, env(safe-area-inset-top))
+    max(10px, env(safe-area-inset-right))
+    max(38px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.is-touch-device .game-over-frame {
+  flex: 0 0 auto;
+  width: min(760px, calc(var(--app-width, 100vw) - 24px));
+  min-width: 0;
+  margin-block: 6px 22px;
+  touch-action: pan-y;
+}
+
+html.is-touch-device .game-over-art {
+  object-fit: contain;
+}
+
+html.is-touch-device .game-over-overlay .game-over-title {
+  top: 13.8%;
+  right: 21.5%;
+  left: 21.5%;
+  gap: 0.1em;
+}
+
+html.is-touch-device .game-over-overlay .game-over-title .overlay-eyebrow {
+  font-size: clamp(7px, 1.15vw, 10px);
+  letter-spacing: 0;
+}
+
+html.is-touch-device .game-over-overlay .game-over-title h1 {
+  font-size: clamp(22px, 3.8vw, 32px);
+  line-height: 0.96;
+  white-space: normal;
+  text-wrap: balance;
+}
+
+html.is-touch-device .game-over-overlay .game-over-title p {
+  max-width: 86%;
+  font-size: clamp(7px, 1.12vw, 10px);
+  line-height: 1.05;
+}
+
+html.is-touch-device .game-over-stats {
+  top: 35.2%;
+  left: 27%;
+  width: 24.5%;
+  height: 36.6%;
+  gap: 2.2%;
+}
+
+html.is-touch-device .game-over-stat--level,
+html.is-touch-device .game-over-stat--sections,
+html.is-touch-device .game-over-stat--virions {
+  top: 0;
+}
+
+html.is-touch-device .game-over-stat dt,
+html.is-touch-device .game-over-details span {
+  font-size: clamp(6px, 1.08vw, 9px);
+}
+
+html.is-touch-device .game-over-stat dd {
+  font-size: clamp(14px, 2.55vw, 21px);
+}
+
+html.is-touch-device .game-over-details {
+  top: 40.2%;
+  right: 22.5%;
+  width: 21.8%;
+  height: 28.5%;
+  gap: 0.45em;
+  font-size: clamp(7px, 1.18vw, 10px);
+  line-height: 1.08;
+}
+
+html.is-touch-device .game-over-details strong {
+  font-size: clamp(13px, 2.35vw, 20px);
+}
+
+html.is-touch-device .game-over-details ul {
+  max-height: 7.8em;
+  gap: 0.18em;
+}
+
+html.is-touch-device .game-over-restart {
+  bottom: 9.3%;
+  left: 35.9%;
+  width: 28.4%;
+  height: 7.8%;
+  font-size: clamp(13px, 2.1vw, 18px);
+  touch-action: manipulation;
+}
+
+html.is-touch-device.is-short-landscape .game-over-overlay {
+  padding-block: 8px max(46px, env(safe-area-inset-bottom));
+}
+
+html.is-touch-device.is-short-landscape .game-over-frame {
+  width: min(720px, calc(var(--app-width, 100vw) - 20px));
+  margin-block: 4px 26px;
+}
