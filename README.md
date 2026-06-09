@@ -14,7 +14,9 @@ On desktop, open the link and click **Start Run**. On phones, rotate to landscap
 
 ## Project Highlights
 
-- Vanilla HTML, CSS, and JavaScript Canvas game with no framework or build step
+- Static HTML, CSS, and JavaScript game with no build step
+- Phaser/WebGL playfield renderer for smoother sprite, projectile, particle, and parallax performance
+- DOM-based HUD and menus so score, health, upgrades, pause controls, and run summaries stay crisp and easy to tune
 - Level-based arcade structure with escalating difficulty and late-stage boss or mini-boss encounters
 - Roguelite upgrade tree with practical immune-system abilities between levels
 - Educational mission language using terms like innate immunity, antigen, complement system, chemotaxis, phagocytosis, and adaptive immunity
@@ -23,8 +25,10 @@ On desktop, open the link and click **Start Run**. On phones, rotate to landscap
 - Influenza virions that multiply on contact and push outward, creating target-priority pressure
 - Generated bloodstream backgrounds, sprite assets, HUD ornaments, upgrade UI, and game-over report art
 - Multi-layer parallax bloodstream environment
-- Desktop and landscape mobile controls
-- Layered audio with music, ambience, boss warnings, combat effects, upgrade sounds, pause sounds, and separate music/effects mute buttons
+- Desktop controls plus landscape mobile controls with a left thumb joystick and right-side combat buttons
+- Mobile-only HUD simplification that hides the mission panel during play so the touch controls and playfield have room
+- Mobile performance path for rapid antibody fire, including optimized WebGL shot rendering and lightweight mobile combat SFX
+- Layered audio with music, ambience, boss warnings, combat effects, upgrade sounds, pause sounds, separate music/effects mute buttons, and mobile combat audio ducking so shots and hits cut through the music
 
 ## Screenshots
 
@@ -123,7 +127,9 @@ The mobile version is designed for landscape play.
 | Complement Pulse | Tap **Pulse** after unlocking it |
 | Pause or resume | Pause button in the top-right HUD |
 
-For the most full-screen iPhone experience, open the live demo in Safari, tap the Share button, and choose **Add to Home Screen**.
+For the most full-screen iPhone experience, open the live demo in Safari, tap the Share button, and choose **Add to Home Screen**. The regular Safari and Chrome browser toolbars still take some vertical space, so the game is tuned to keep its important mobile controls and overlays reachable even inside the browser.
+
+The mission panel is intentionally hidden during landscape mobile gameplay. The level name, target count, and objective still appear through level-complete, upgrade, and boss-flow screens, while the in-game HUD stays focused on score, health, level, pause, progress, and touch controls.
 
 ## Game Flow
 
@@ -156,6 +162,22 @@ The game uses a layered audio system:
 - Boss-warning rumble before the boss appears, then boss-loop music during the fight
 - Separate sound effects for antibody shots, hits, boss hits, boss phase changes, boss defeat, influenza replication, budding-virus split, platelet impact, player damage, player death, pause/resume, UI selection, and upgraded dash
 - Pause-menu toggles for music and effects
+- Mobile combat SFX budgeting for rapid-fire situations, using lightweight Web Audio tones for the highest-frequency shot and hit feedback on touch devices
+- Brief mobile music/ambience ducking when shots and hits play, so the action remains audible without returning to the stutter caused by overlapping many large audio elements
+
+## Performance Notes
+
+The prototype started as a Canvas-first game and later moved the active playfield to Phaser/WebGL while preserving the same artwork, gameplay feel, HUD, and upgrade flow. Phaser handles the sprite-heavy bloodstream scene more efficiently, especially on mobile, while the existing HTML/CSS screens keep the custom UI art and readable text.
+
+The mobile build also uses a few targeted optimizations:
+
+- WebGL-rendered parallax layers, enemies, player sprite, and projectiles
+- Simplified mobile projectile drawing when many antibodies are active
+- Capped visible particle density on touch devices
+- Mobile-only combat SFX rate limits and Web Audio tones for rapid shot/hit sounds
+- CSS gesture blocking and fixed viewport rules to reduce accidental zoom while tapping the Fire button
+
+The desktop build keeps the richer projectile sprites and full audio assets where performance is less constrained.
 
 ## Project Structure
 
@@ -164,12 +186,15 @@ The game uses a layered audio system:
 ├── index.html          # Game canvas, overlays, HUD, and screen markup
 ├── styles.css          # HUD, menus, mobile layout, overlays, and responsive styling
 ├── src/game.js         # Game loop, input, combat, spawning, level flow, audio, and drawing
+├── vendor/             # Vendored Phaser runtime used by the WebGL playfield
 ├── assets/             # Runtime art, sprites, audio, UI assets, and backgrounds
 └── docs/               # Design notes, reference material, and README screenshots
 ```
 
 ## Development Notes
 
-Bloodstream Defender currently uses vanilla Canvas instead of a game engine so the prototype stays easy to understand, edit, and deploy as a static site. The visual target is a semi-accurate, semi-cartoony bloodstream: readable biology silhouettes, expressive enemies, rich red plasma layers, and arcade-friendly combat clarity.
+Bloodstream Defender is still deployed as a simple static site, but the playfield now uses Phaser/WebGL for the performance-critical rendering work. The HUD, pause menu, level-complete screen, upgrade tree, and game-over report remain regular HTML/CSS so they can stay readable, accessible, and easy to iterate.
+
+The visual target is a semi-accurate, semi-cartoony bloodstream: readable biology silhouettes, expressive enemies, rich red plasma layers, and arcade-friendly combat clarity.
 
 The design direction is an educational roguelite arcade game. Each cleared vessel section introduces immune-system language, and each upgrade gives the player a practical antibody adaptation that also teaches how to use the new ability.

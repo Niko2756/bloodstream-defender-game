@@ -310,6 +310,7 @@ const audio = {
   activeMusicKey: null,
   musicFadeSpeed: 1.8,
   sfxMasterVolume: 0.95,
+  mobileSfxDuckTimer: 0,
 };
 
 function readMutePreference(key) {
@@ -1594,12 +1595,17 @@ function updateAudioScene(dt = 0.016) {
   state.bossMusicDelay = Math.max(0, state.bossMusicDelay - dt);
   state.runStartMusicDelay = Math.max(0, state.runStartMusicDelay - dt);
   state.ambienceIntroDelay = Math.max(0, state.ambienceIntroDelay - dt);
+  audio.mobileSfxDuckTimer = Math.max(0, audio.mobileSfxDuckTimer - dt);
   const musicKey = getDesiredMusicKey();
   if (!state.paused && musicKey) {
     audio.activeMusicKey = musicKey;
   }
   const pauseScale = state.paused ? 0.34 : 1;
-  const musicScale = audio.musicMuted ? 0 : 1;
+  const mobileSfxDuck =
+    shouldUseMobileSfxBudget() && audio.mobileSfxDuckTimer > 0
+      ? 1 - 0.28 * clamp(audio.mobileSfxDuckTimer / 0.14, 0, 1)
+      : 1;
+  const musicScale = audio.musicMuted ? 0 : mobileSfxDuck;
   for (const [key, track] of Object.entries(audio.music)) {
     updateLoopTrack(track, key === musicKey ? track.baseVolume * pauseScale * musicScale : 0, dt);
   }
@@ -1607,7 +1613,7 @@ function updateAudioScene(dt = 0.016) {
   const ambienceHeld = state.bossMusicDelay > 0 || state.runStartMusicDelay > 0 || state.ambienceIntroDelay > 0;
   const playAmbience =
     state.running && !state.ended && !state.awaitingUpgrade && !state.levelComplete && !ambienceHeld;
-  const ambientIntensity = playAmbience && !audio.musicMuted ? (state.paused ? 0.34 : 1) : 0;
+  const ambientIntensity = playAmbience && !audio.musicMuted ? (state.paused ? 0.34 : 1) * mobileSfxDuck : 0;
   const ambienceScales = {
     bloodstream: 1,
     cellularSparkle: state.level >= 3 ? 0.55 : 0,
@@ -1738,12 +1744,19 @@ function playNoise({ duration = 0.16, gain = 0.06, frequency = 900 }) {
   source.start(now);
 }
 
+function triggerMobileCombatSfxDucking(duration = 0.14) {
+  if (!shouldUseMobileSfxBudget() || audio.sfxMuted) return;
+  audio.mobileSfxDuckTimer = Math.max(audio.mobileSfxDuckTimer, duration);
+}
+
 function playShootSfx() {
   if (shouldUseMobileSfxBudget()) {
     const now = performance.now();
     if (now - lastShootSfxAt < MOBILE_SHOOT_SFX_INTERVAL) return;
     lastShootSfxAt = now;
-    playTone({ type: "triangle", start: 980, end: 540, duration: 0.07, gain: 0.09 });
+    triggerMobileCombatSfxDucking(0.14);
+    playTone({ type: "triangle", start: 1320, end: 640, duration: 0.082, gain: 0.2 });
+    playTone({ type: "sine", start: 1960, end: 1180, duration: 0.052, gain: 0.075 });
     return;
   }
 
@@ -1784,7 +1797,9 @@ function playVirusPopSfx() {
     const now = performance.now();
     if (now - lastVirusPopSfxAt < MOBILE_POP_SFX_INTERVAL) return;
     lastVirusPopSfxAt = now;
-    playTone({ type: "sawtooth", start: 190, end: 72, duration: 0.1, gain: 0.08 });
+    triggerMobileCombatSfxDucking(0.12);
+    playTone({ type: "sawtooth", start: 240, end: 72, duration: 0.12, gain: 0.14 });
+    playTone({ type: "triangle", start: 680, end: 340, duration: 0.07, gain: 0.08 });
     return;
   }
 
@@ -1799,7 +1814,9 @@ function playAntibodyHitSfx() {
     const now = performance.now();
     if (now - lastAntibodyHitSfxAt < MOBILE_HIT_SFX_INTERVAL) return;
     lastAntibodyHitSfxAt = now;
-    playTone({ type: "triangle", start: 420, end: 680, duration: 0.07, gain: 0.055 });
+    triggerMobileCombatSfxDucking(0.11);
+    playTone({ type: "square", start: 560, end: 880, duration: 0.052, gain: 0.115 });
+    playTone({ type: "triangle", start: 920, end: 520, duration: 0.058, gain: 0.07 });
     return;
   }
 
