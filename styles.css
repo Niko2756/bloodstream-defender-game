@@ -2127,9 +2127,15 @@ button {
     width: 48px;
     min-width: 48px;
     height: 48px;
+    padding: 0;
+    border: 1px solid rgba(102, 242, 255, 0.42);
+    border-radius: 8px;
     background:
-      url("./assets/ui/hud-pause-medallion.png") center / 48px 48px no-repeat,
-      transparent;
+      linear-gradient(135deg, rgba(18, 60, 68, 0.88), rgba(31, 7, 23, 0.78));
+    box-shadow:
+      0 10px 24px rgba(10, 0, 8, 0.34),
+      inset 0 0 0 1px rgba(255, 215, 110, 0.1);
+    filter: none;
   }
 
   .pause-button::after {
@@ -2137,7 +2143,11 @@ button {
   }
 
   .pause-button__bars {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(2, 5px);
+    gap: 5px;
+    width: 15px;
+    height: 20px;
   }
 
   .pause-button__label {
@@ -3495,14 +3505,27 @@ button {
     min-width: 48px;
     height: 48px;
     padding: 0;
+    border: 1px solid rgba(102, 242, 255, 0.42);
+    border-radius: 8px;
     background:
-      url("./assets/ui/hud-pause-medallion.png") center / 48px 48px no-repeat,
-      transparent;
+      linear-gradient(135deg, rgba(18, 60, 68, 0.88), rgba(31, 7, 23, 0.78)) !important;
+    box-shadow:
+      0 10px 24px rgba(10, 0, 8, 0.34),
+      inset 0 0 0 1px rgba(255, 215, 110, 0.1);
+    filter: none;
   }
 
   .pause-button::after,
   .pause-button__label {
     display: none;
+  }
+
+  .pause-button__bars {
+    display: grid;
+    grid-template-columns: repeat(2, 5px);
+    gap: 5px;
+    width: 15px;
+    height: 20px;
   }
 
   .hud__stat--level {
@@ -3743,14 +3766,32 @@ html.is-touch-device.is-landscape .pause-button {
   min-width: 48px;
   height: 48px;
   padding: 0;
+  border: 1px solid rgba(102, 242, 255, 0.42);
+  border-radius: 8px;
   background:
-    url("./assets/ui/hud-pause-medallion.png") center / 48px 48px no-repeat,
-    transparent;
+    linear-gradient(135deg, rgba(18, 60, 68, 0.88), rgba(31, 7, 23, 0.78)) !important;
+  box-shadow:
+    0 10px 24px rgba(10, 0, 8, 0.34),
+    inset 0 0 0 1px rgba(255, 215, 110, 0.1);
+  filter: none;
 }
 
 html.is-touch-device.is-landscape .pause-button::after,
 html.is-touch-device.is-landscape .pause-button__label {
   display: none;
+}
+
+html.is-touch-device.is-landscape .pause-button__bars {
+  display: grid;
+  grid-template-columns: repeat(2, 5px);
+  gap: 5px;
+  width: 15px;
+  height: 20px;
+}
+
+html.is-touch-device.is-landscape .pause-button__bars span {
+  width: 5px;
+  height: 20px;
 }
 
 html.is-touch-device.is-landscape .hud__stat--level {

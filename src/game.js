@@ -75,9 +75,12 @@ const MOBILE_HIT_SFX_INTERVAL = 70;
 const MOBILE_POP_SFX_INTERVAL = 100;
 const SHOT_COLLISION_CELL_SIZE = 150;
 const SHOT_COLLISION_MAX_HIT_RADIUS = 14;
+const SHOT_COLLISION_BUCKET_POOL_LIMIT = 180;
+const AUDIO_RECOVERY_RETRY_DELAYS = [0, 80, 240, 640];
 const shotPool = [];
 const particlePool = [];
 const shotCollisionBuckets = new Map();
+const shotCollisionBucketPool = [];
 const shotCollisionCandidates = [];
 const renderCache = {
   shotSprite: null,
@@ -154,17 +157,24 @@ const audioManifest = {
     antibodyShot: {
       src: "./assets/audio/Antibody%20shot.wav",
       volume: 0.54,
-      poolSize: 6,
+      poolSize: 10,
+      group: "combat",
+      maxVoices: 36,
+      mobileMaxVoices: 2,
     },
     antibodyHit: {
       src: "./assets/audio/Antibody%20hit.wav",
       volume: 0.5,
       poolSize: 5,
+      group: "combat",
+      maxVoices: 5,
+      mobileMaxVoices: 3,
     },
     chemotaxisDash: {
       src: "./assets/audio/Chemotaxis%20dash.wav",
       volume: 0.6,
       poolSize: 3,
+      group: "combat",
     },
     chemotaxisDashUpgraded: {
       src: "./assets/audio/Chemotaxis%20dash%20upgraded.wav",
@@ -172,36 +182,45 @@ const audioManifest = {
       poolSize: 3,
       maxDuration: 1.12,
       fadeOut: 0.24,
+      group: "combat",
     },
     complementPulse: {
       src: "./assets/audio/Complement%20pulse.wav",
       volume: 0.68,
       poolSize: 3,
+      group: "combat",
     },
     playerDamage: {
       src: "./assets/audio/Player%20damage.wav",
       volume: 0.66,
       poolSize: 3,
+      group: "combat",
     },
     playerDeath: {
       src: "./assets/audio/Player%20death.mp3",
       volume: 0.72,
       poolSize: 2,
+      group: "combat",
     },
     virusPop: {
       src: "./assets/audio/Virus%20pop.wav",
       volume: 0.58,
       poolSize: 6,
+      group: "combat",
+      maxVoices: 4,
+      mobileMaxVoices: 2,
     },
     upgradeSelected: {
       src: "./assets/audio/Upgrade%20selected.wav",
       volume: 0.58,
       poolSize: 3,
+      group: "ui",
     },
     levelComplete: {
       src: "./assets/audio/Level%20Complete%20Sting.wav",
       volume: 0.64,
       poolSize: 2,
+      group: "ui",
     },
     bossWarning: {
       src: "./assets/audio/Boss%20warning%20rumble.mp3",
@@ -209,6 +228,9 @@ const audioManifest = {
       poolSize: 1,
       maxDuration: BOSS_WARNING_DURATION,
       fadeOut: 2,
+      group: "combat",
+      maxVoices: 1,
+      mobileMaxVoices: 1,
     },
     bossHit: {
       src: "./assets/audio/Boss%20Hit.wav",
@@ -216,6 +238,9 @@ const audioManifest = {
       poolSize: 3,
       maxDuration: 0.82,
       fadeOut: 0.18,
+      group: "combat",
+      maxVoices: 2,
+      mobileMaxVoices: 1,
     },
     bossDefeated: {
       src: "./assets/audio/Boss%20defeated.mp3",
@@ -223,6 +248,9 @@ const audioManifest = {
       poolSize: 1,
       maxDuration: 2.4,
       fadeOut: 0.65,
+      group: "combat",
+      maxVoices: 1,
+      mobileMaxVoices: 1,
     },
     bossPhaseChange: {
       src: "./assets/audio/Boss%20phase%20change.mp3",
@@ -230,6 +258,9 @@ const audioManifest = {
       poolSize: 1,
       maxDuration: 2.7,
       fadeOut: 0.65,
+      group: "combat",
+      maxVoices: 1,
+      mobileMaxVoices: 1,
     },
     buddingSplit: {
       src: "./assets/audio/Budding%20virus%20split.wav",
@@ -237,6 +268,7 @@ const audioManifest = {
       poolSize: 3,
       maxDuration: 1.15,
       fadeOut: 0.28,
+      group: "combat",
     },
     influenzaHit: {
       src: "./assets/audio/Influenza%20hit.wav",
@@ -244,6 +276,9 @@ const audioManifest = {
       poolSize: 4,
       maxDuration: 0.7,
       fadeOut: 0.18,
+      group: "combat",
+      maxVoices: 3,
+      mobileMaxVoices: 2,
     },
     influenzaReplication: {
       src: "./assets/audio/Influenza%20replication%20bloom.wav",
@@ -251,6 +286,9 @@ const audioManifest = {
       poolSize: 3,
       maxDuration: 1.35,
       fadeOut: 0.28,
+      group: "combat",
+      maxVoices: 2,
+      mobileMaxVoices: 1,
     },
     pauseOpen: {
       src: "./assets/audio/Pause%20open.wav",
@@ -258,6 +296,7 @@ const audioManifest = {
       poolSize: 2,
       maxDuration: 0.85,
       fadeOut: 0.22,
+      group: "ui",
     },
     pauseResume: {
       src: "./assets/audio/Pause%20resume.mp3",
@@ -265,6 +304,7 @@ const audioManifest = {
       poolSize: 1,
       maxDuration: 1.15,
       fadeOut: 0.36,
+      group: "ui",
     },
     plateletBump: {
       src: "./assets/audio/Platelet%20or%20clot%20bump-crack.wav",
@@ -272,6 +312,7 @@ const audioManifest = {
       poolSize: 3,
       maxDuration: 1.05,
       fadeOut: 0.25,
+      group: "combat",
     },
     restartConfirm: {
       src: "./assets/audio/Restart%20confirmation%20open.wav",
@@ -279,6 +320,7 @@ const audioManifest = {
       poolSize: 2,
       maxDuration: 1.2,
       fadeOut: 0.28,
+      group: "ui",
     },
     upgradeHover: {
       src: "./assets/audio/Upgrade%20card%20hover.wav",
@@ -286,6 +328,9 @@ const audioManifest = {
       poolSize: 2,
       maxDuration: 0.42,
       fadeOut: 0.14,
+      group: "ui",
+      maxVoices: 1,
+      mobileMaxVoices: 1,
     },
     uiSelect: {
       src: "./assets/audio/ui_button_select.wav",
@@ -293,6 +338,7 @@ const audioManifest = {
       poolSize: 3,
       maxDuration: 0.55,
       fadeOut: 0.16,
+      group: "ui",
     },
   },
 };
@@ -300,7 +346,12 @@ const audioManifest = {
 const audio = {
   context: null,
   master: null,
+  sfxGain: null,
+  combatSfxGain: null,
+  uiSfxGain: null,
+  activeSfxVoices: new Set(),
   assetsReady: false,
+  sfxDecodeStarted: false,
   unlocked: false,
   musicMuted: readMutePreference(MUSIC_MUTE_STORAGE_KEY),
   sfxMuted: readMutePreference(SFX_MUTE_STORAGE_KEY),
@@ -311,6 +362,7 @@ const audio = {
   musicFadeSpeed: 1.8,
   sfxMasterVolume: 0.95,
   mobileSfxDuckTimer: 0,
+  recoveryTimers: [],
 };
 
 function readMutePreference(key) {
@@ -362,8 +414,28 @@ function silenceLoopTracks(tracks) {
   }
 }
 
-function stopAllSfx() {
+function clearSfxBuffers() {
   for (const sfx of Object.values(audio.sfx)) {
+    sfx.buffer = null;
+    sfx.bufferPromise = null;
+    sfx.bufferFailed = false;
+  }
+  audio.sfxDecodeStarted = false;
+}
+
+function stopAllSfx() {
+  for (const voice of audio.activeSfxVoices) {
+    try {
+      voice.source.stop();
+    } catch (error) {
+      // The voice may have already ended between frames.
+    }
+    if (voice.sfx) voice.sfx.activeVoices = Math.max(0, voice.sfx.activeVoices - 1);
+  }
+  audio.activeSfxVoices.clear();
+
+  for (const sfx of Object.values(audio.sfx)) {
+    sfx.activeVoices = 0;
     for (const element of sfx.pool) {
       if (element.audioStopTimer) {
         window.clearTimeout(element.audioStopTimer);
@@ -383,30 +455,84 @@ function stopAllSfx() {
   }
 }
 
-function setMusicMuted(muted) {
+function primeSfxOutputFromGesture(context = audio.context) {
+  if (!context || !audio.master || audio.sfxMuted) return;
+
+  try {
+    const now = context.currentTime;
+    const oscillator = context.createOscillator();
+    const output = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(440, now);
+    output.gain.setValueAtTime(0.0001, now);
+    output.gain.exponentialRampToValueAtTime(0.00001, now + 0.025);
+    oscillator.connect(output);
+    output.connect(audio.master);
+    oscillator.start(now);
+    oscillator.stop(now + 0.03);
+  } catch (error) {
+    // This is only an unlock nudge; normal SFX playback can still recover later.
+  }
+}
+
+function resumeAudioFromUserGesture({ forceLoopRestart = false, primeSfx = false } = {}) {
+  const context = ensureAudio();
+  if (context?.state !== "running" && context?.resume) {
+    void context.resume().catch(() => {});
+  }
+  startSfxBufferDecode();
+  updateAudioScene(0);
+  if (!audio.musicMuted) {
+    replayDesiredLoopTracks(audio.music, forceLoopRestart);
+    replayDesiredLoopTracks(audio.ambience, forceLoopRestart);
+  }
+  if (primeSfx) primeSfxOutputFromGesture(context);
+}
+
+function resetCombatSfxThrottleTimers() {
+  lastShootSfxAt = 0;
+  lastVirusPopSfxAt = 0;
+  lastAntibodyHitSfxAt = 0;
+  lastBossHitSfxAt = 0;
+}
+
+function setMusicMuted(muted, options = {}) {
   audio.musicMuted = muted;
   storeMutePreference(MUSIC_MUTE_STORAGE_KEY, muted);
+  ensureAudio();
   if (muted) {
     silenceLoopTracks(audio.music);
     silenceLoopTracks(audio.ambience);
   }
   updateMuteButtons();
-  updateAudioScene(0);
+  if (!muted) {
+    resumeAudioFromUserGesture({
+      forceLoopRestart: true,
+      primeSfx: options.primeSfx ?? !audio.sfxMuted,
+    });
+  }
+  recoverAudioPlayback({ forceLoopRestart: !muted });
 }
 
-function setSfxMuted(muted) {
+function setSfxMuted(muted, options = {}) {
   audio.sfxMuted = muted;
   storeMutePreference(SFX_MUTE_STORAGE_KEY, muted);
+  ensureAudio();
   if (muted) stopAllSfx();
+  if (!muted) {
+    resetCombatSfxThrottleTimers();
+    resumeAudioFromUserGesture({ primeSfx: options.primeSfx ?? true });
+  }
   updateMuteButtons();
+  recoverAudioPlayback();
 }
 
-function toggleMusicMuted() {
-  setMusicMuted(!audio.musicMuted);
+function toggleMusicMuted(options = {}) {
+  setMusicMuted(!audio.musicMuted, options);
 }
 
-function toggleSfxMuted() {
-  setSfxMuted(!audio.sfxMuted);
+function toggleSfxMuted(options = {}) {
+  setSfxMuted(!audio.sfxMuted, options);
 }
 
 const state = {
@@ -1434,9 +1560,17 @@ function createLoopTrack(config) {
 function createSfxPool(config) {
   const poolSize = config.poolSize ?? 3;
   return {
+    src: config.src,
+    group: config.group ?? "combat",
     volume: config.volume,
     maxDuration: config.maxDuration ?? 0,
     fadeOut: config.fadeOut ?? 0.25,
+    maxVoices: config.maxVoices ?? poolSize,
+    mobileMaxVoices: config.mobileMaxVoices ?? Math.min(poolSize, 3),
+    activeVoices: 0,
+    buffer: null,
+    bufferPromise: null,
+    bufferFailed: false,
     index: 0,
     pool: Array.from({ length: poolSize }, () => {
       const element = new Audio(config.src);
@@ -1445,6 +1579,51 @@ function createSfxPool(config) {
       return element;
     }),
   };
+}
+
+function decodeAudioBuffer(context, arrayBuffer) {
+  try {
+    const decodeResult = context.decodeAudioData(arrayBuffer.slice(0));
+    if (decodeResult && typeof decodeResult.then === "function") return decodeResult;
+  } catch (error) {
+    // Older Safari builds use the callback form below.
+  }
+
+  return new Promise((resolve, reject) => {
+    context.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+  });
+}
+
+function decodeSfxBuffer(sfx) {
+  if (!audio.context || sfx.buffer || sfx.bufferPromise || sfx.bufferFailed || !window.fetch) {
+    return sfx.bufferPromise;
+  }
+
+  sfx.bufferPromise = window
+    .fetch(sfx.src)
+    .then((response) => {
+      if (!response.ok) throw new Error(`Unable to load ${sfx.src}`);
+      return response.arrayBuffer();
+    })
+    .then((arrayBuffer) => decodeAudioBuffer(audio.context, arrayBuffer))
+    .then((buffer) => {
+      sfx.buffer = buffer;
+      return buffer;
+    })
+    .catch(() => {
+      sfx.bufferFailed = true;
+      return null;
+    });
+
+  return sfx.bufferPromise;
+}
+
+function startSfxBufferDecode() {
+  if (!audio.context || audio.sfxDecodeStarted) return;
+  audio.sfxDecodeStarted = true;
+  for (const sfx of Object.values(audio.sfx)) {
+    decodeSfxBuffer(sfx);
+  }
 }
 
 function prepareAudioAssets() {
@@ -1474,10 +1653,26 @@ function ensureAudio() {
     return null;
   }
 
+  if (audio.context?.state === "closed") {
+    audio.activeSfxVoices.clear();
+    for (const sfx of Object.values(audio.sfx)) {
+      sfx.activeVoices = 0;
+    }
+    clearSfxBuffers();
+    audio.context = null;
+    audio.master = null;
+    audio.sfxGain = null;
+    audio.combatSfxGain = null;
+    audio.uiSfxGain = null;
+  }
+
   if (!audio.context) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     audio.context = new AudioContextClass();
     audio.master = audio.context.createGain();
+    audio.sfxGain = audio.context.createGain();
+    audio.combatSfxGain = audio.context.createGain();
+    audio.uiSfxGain = audio.context.createGain();
     const compressor = audio.context.createDynamicsCompressor();
     compressor.threshold.value = -18;
     compressor.knee.value = 16;
@@ -1485,16 +1680,80 @@ function ensureAudio() {
     compressor.attack.value = 0.004;
     compressor.release.value = 0.16;
     audio.master.gain.value = 0.42;
+    audio.sfxGain.gain.value = 1;
+    audio.combatSfxGain.gain.value = 1.14;
+    audio.uiSfxGain.gain.value = 0.96;
+    audio.combatSfxGain.connect(audio.sfxGain);
+    audio.uiSfxGain.connect(audio.sfxGain);
+    audio.sfxGain.connect(audio.master);
     audio.master.connect(compressor);
     compressor.connect(audio.context.destination);
   }
 
-  if (audio.context.state === "suspended") {
-    void audio.context.resume();
+  if (audio.context.state !== "running" && audio.context.resume) {
+    void audio.context.resume().catch(() => {});
   }
 
+  startSfxBufferDecode();
   updateAudioScene(0);
   return audio.context;
+}
+
+function replayDesiredLoopTracks(tracks, forceLoopRestart = false) {
+  for (const track of Object.values(tracks)) {
+    if (!track.shouldPlay && track.targetVolume <= 0.001) continue;
+    if (forceLoopRestart) {
+      track.loopFadeIn = Math.min(track.fadeLoop, 0.24);
+      track.loopMultiplier = track.fadeLoop > 0 ? 0 : 1;
+    }
+    if (track.element.paused || forceLoopRestart) {
+      tryPlayElement(track.element);
+    }
+  }
+}
+
+function runAudioRecoveryAttempt(forceLoopRestart = false) {
+  if (!audio.unlocked) return;
+  const context = ensureAudio();
+  const afterResume = () => {
+    startSfxBufferDecode();
+    updateAudioScene(0);
+    if (!audio.musicMuted) {
+      replayDesiredLoopTracks(audio.music, forceLoopRestart);
+      replayDesiredLoopTracks(audio.ambience, forceLoopRestart);
+    }
+  };
+
+  if (context?.state !== "running" && context?.resume) {
+    void context.resume().then(afterResume).catch(afterResume);
+    return;
+  }
+
+  afterResume();
+}
+
+function recoverAudioPlayback({ forceLoopRestart = false, repeat = true } = {}) {
+  if (!audio.unlocked) return;
+  for (const timer of audio.recoveryTimers) {
+    window.clearTimeout(timer);
+  }
+  audio.recoveryTimers.length = 0;
+
+  const delays = repeat ? AUDIO_RECOVERY_RETRY_DELAYS : [0];
+  for (const delay of delays) {
+    const timer = window.setTimeout(() => runAudioRecoveryAttempt(forceLoopRestart), delay);
+    audio.recoveryTimers.push(timer);
+  }
+}
+
+function recoverAudioFromPageResume() {
+  if (document.visibilityState === "hidden") return;
+  recoverAudioPlayback({ forceLoopRestart: true });
+}
+
+function nudgeAudioFromUserGesture() {
+  if (!audio.unlocked) return;
+  runAudioRecoveryAttempt(false);
 }
 
 function tryPlayElement(element) {
@@ -1632,12 +1891,71 @@ function unlockMenuAudio() {
   updateAudioScene(0);
 }
 
-function playAssetSfx(name, fallback) {
-  if (audio.sfxMuted) return;
-  prepareAudioAssets();
-  const sfx = audio.sfx[name];
-  if (!audio.unlocked || !sfx) {
-    fallback?.();
+function getSfxOutputNode(group) {
+  if (group === "ui") return audio.uiSfxGain || audio.sfxGain || audio.master;
+  return audio.combatSfxGain || audio.sfxGain || audio.master;
+}
+
+function releaseBufferedSfxVoice(voice) {
+  if (!audio.activeSfxVoices.has(voice)) return;
+  audio.activeSfxVoices.delete(voice);
+  voice.sfx.activeVoices = Math.max(0, voice.sfx.activeVoices - 1);
+}
+
+function playBufferedSfx(sfx, options = {}) {
+  const context = ensureAudio();
+  if (!context || !audio.master || !sfx.buffer) return false;
+
+  const maxVoices = shouldUseMobileSfxBudget() ? sfx.mobileMaxVoices : sfx.maxVoices;
+  if (sfx.activeVoices >= maxVoices) return true;
+
+  const now = context.currentTime;
+  const startAt = now + Math.max(0, options.delay ?? 0);
+  const source = context.createBufferSource();
+  const output = context.createGain();
+  const volumeScale = options.volumeScale ?? 1;
+  const volume = clamp(sfx.volume * audio.sfxMasterVolume * volumeScale, 0, 1);
+  const bufferDuration = sfx.buffer.duration || 0;
+  const playDuration = sfx.maxDuration > 0 ? Math.min(sfx.maxDuration, bufferDuration) : bufferDuration;
+  const fadeDuration = sfx.fadeOut > 0 ? Math.min(sfx.fadeOut, Math.max(0, playDuration * 0.75)) : 0;
+  const fadeStart = Math.max(0, playDuration - fadeDuration);
+
+  source.buffer = sfx.buffer;
+  output.gain.setValueAtTime(volume, startAt);
+  if (fadeDuration > 0 && playDuration > 0) {
+    output.gain.setValueAtTime(volume, startAt + fadeStart);
+    output.gain.linearRampToValueAtTime(0.0001, startAt + playDuration);
+  }
+
+  source.connect(output);
+  output.connect(getSfxOutputNode(sfx.group));
+
+  const voice = { source, sfx };
+  sfx.activeVoices += 1;
+  audio.activeSfxVoices.add(voice);
+  source.onended = () => releaseBufferedSfxVoice(voice);
+  source.start(startAt);
+  if (playDuration > 0 && playDuration < bufferDuration - 0.02) {
+    source.stop(startAt + playDuration + 0.02);
+  }
+
+  return true;
+}
+
+function runSfxFallback(fallback, options = {}) {
+  if (!fallback) return;
+  const delayMs = Math.max(0, options.delay ?? 0) * 1000;
+  if (delayMs > 0) {
+    window.setTimeout(fallback, delayMs);
+    return;
+  }
+  fallback();
+}
+
+function playElementSfx(sfx, fallback, options = {}) {
+  const delayMs = Math.max(0, options.delay ?? 0) * 1000;
+  if (delayMs > 0) {
+    window.setTimeout(() => playElementSfx(sfx, fallback, { ...options, delay: 0 }), delayMs);
     return;
   }
 
@@ -1657,7 +1975,8 @@ function playAssetSfx(name, fallback) {
   } catch (error) {
     // The next play still works; the browser just was not ready to seek yet.
   }
-  element.volume = clamp(sfx.volume * audio.sfxMasterVolume, 0, 1);
+  const volumeScale = options.volumeScale ?? 1;
+  element.volume = clamp(sfx.volume * audio.sfxMasterVolume * volumeScale, 0, 1);
   const playPromise = element.play();
   if (playPromise) {
     playPromise.catch(() => fallback?.());
@@ -1683,13 +2002,34 @@ function playAssetSfx(name, fallback) {
         } catch (error) {
           // The next play will restart cleanly once the browser allows seeking.
         }
-        element.volume = clamp(sfx.volume * audio.sfxMasterVolume, 0, 1);
+        element.volume = clamp(sfx.volume * audio.sfxMasterVolume * volumeScale, 0, 1);
         element.audioFadeFrame = null;
         element.audioStopTimer = null;
       };
       element.audioFadeFrame = window.requestAnimationFrame(fadeStep);
     }, holdDurationMs);
   }
+}
+
+function playAssetSfx(name, fallback, options = {}) {
+  if (audio.sfxMuted) return;
+  prepareAudioAssets();
+  const sfx = audio.sfx[name];
+  if (!audio.unlocked || !sfx) {
+    runSfxFallback(fallback, options);
+    return;
+  }
+
+  if (audio.context) {
+    if (sfx.buffer && playBufferedSfx(sfx, options)) return;
+    decodeSfxBuffer(sfx);
+    if (shouldUseMobileSfxBudget()) {
+      runSfxFallback(fallback, options);
+      return;
+    }
+  }
+
+  playElementSfx(sfx, fallback, options);
 }
 
 function playTone({ type = "sine", start = 440, end = start, duration = 0.12, gain = 0.08 }) {
@@ -1749,21 +2089,33 @@ function triggerMobileCombatSfxDucking(duration = 0.14) {
   audio.mobileSfxDuckTimer = Math.max(audio.mobileSfxDuckTimer, duration);
 }
 
-function playShootSfx() {
+function playShootSfx(options = {}) {
   if (shouldUseMobileSfxBudget()) {
     const now = performance.now();
     if (now - lastShootSfxAt < MOBILE_SHOOT_SFX_INTERVAL) return;
     lastShootSfxAt = now;
     triggerMobileCombatSfxDucking(0.14);
-    playTone({ type: "triangle", start: 1320, end: 640, duration: 0.082, gain: 0.2 });
-    playTone({ type: "sine", start: 1960, end: 1180, duration: 0.052, gain: 0.075 });
+    playAssetSfx(
+      "antibodyShot",
+      () => {
+        playTone({ type: "triangle", start: 1320, end: 640, duration: 0.082, gain: 0.2 });
+        playTone({ type: "sine", start: 1960, end: 1180, duration: 0.052, gain: 0.075 });
+      },
+      { volumeScale: 1.16 },
+    );
     return;
   }
 
-  playAssetSfx("antibodyShot", () => {
+  const playFallbackTone = () => {
     playTone({ type: "triangle", start: 980, end: 520, duration: 0.1, gain: 0.12 });
     playTone({ type: "sine", start: 1520, end: 880, duration: 0.055, gain: 0.06 });
-  });
+  };
+
+  playAssetSfx(
+    "antibodyShot",
+    playFallbackTone,
+    options,
+  );
 }
 
 function playSwimSurgeSfx(direction) {
@@ -1798,8 +2150,14 @@ function playVirusPopSfx() {
     if (now - lastVirusPopSfxAt < MOBILE_POP_SFX_INTERVAL) return;
     lastVirusPopSfxAt = now;
     triggerMobileCombatSfxDucking(0.12);
-    playTone({ type: "sawtooth", start: 240, end: 72, duration: 0.12, gain: 0.14 });
-    playTone({ type: "triangle", start: 680, end: 340, duration: 0.07, gain: 0.08 });
+    playAssetSfx(
+      "virusPop",
+      () => {
+        playTone({ type: "sawtooth", start: 240, end: 72, duration: 0.12, gain: 0.14 });
+        playTone({ type: "triangle", start: 680, end: 340, duration: 0.07, gain: 0.08 });
+      },
+      { volumeScale: 1.12 },
+    );
     return;
   }
 
@@ -1815,8 +2173,14 @@ function playAntibodyHitSfx() {
     if (now - lastAntibodyHitSfxAt < MOBILE_HIT_SFX_INTERVAL) return;
     lastAntibodyHitSfxAt = now;
     triggerMobileCombatSfxDucking(0.11);
-    playTone({ type: "square", start: 560, end: 880, duration: 0.052, gain: 0.115 });
-    playTone({ type: "triangle", start: 920, end: 520, duration: 0.058, gain: 0.07 });
+    playAssetSfx(
+      "antibodyHit",
+      () => {
+        playTone({ type: "square", start: 560, end: 880, duration: 0.052, gain: 0.115 });
+        playTone({ type: "triangle", start: 920, end: 520, duration: 0.058, gain: 0.07 });
+      },
+      { volumeScale: 1.18 },
+    );
     return;
   }
 
@@ -3519,7 +3883,14 @@ function fireShot() {
   }
   player.cooldown = Math.max(0.055, 0.13 * Math.pow(0.78, rapidRank));
 
-  playShootSfx();
+  if (shouldUseMobileSfxBudget()) {
+    playShootSfx();
+  } else {
+    const shotVolumeScale = spread.length > 1 ? 0.82 : 1;
+    for (let index = 0; index < spread.length; index += 1) {
+      playShootSfx({ delay: index * 0.018, volumeScale: shotVolumeScale });
+    }
+  }
   addParticleBurst(
     player.x + mainDirection.x * (player.radius + 10),
     player.y + mainDirection.y * (player.radius + 10),
@@ -4100,21 +4471,35 @@ function applyShotHit(virus, shot) {
 }
 
 function getShotCollisionCellKey(cellX, cellY) {
-  return `${cellX}:${cellY}`;
+  return cellX * 4096 + cellY;
+}
+
+function releaseShotCollisionBuckets() {
+  for (const bucket of shotCollisionBuckets.values()) {
+    bucket.length = 0;
+    if (shotCollisionBucketPool.length < SHOT_COLLISION_BUCKET_POOL_LIMIT) {
+      shotCollisionBucketPool.push(bucket);
+    }
+  }
+  shotCollisionBuckets.clear();
+}
+
+function acquireShotCollisionBucket() {
+  return shotCollisionBucketPool.pop() || [];
 }
 
 function addVirusToShotCollisionBucket(cellX, cellY, virus) {
   const key = getShotCollisionCellKey(cellX, cellY);
   let bucket = shotCollisionBuckets.get(key);
   if (!bucket) {
-    bucket = [];
+    bucket = acquireShotCollisionBucket();
     shotCollisionBuckets.set(key, bucket);
   }
   bucket.push(virus);
 }
 
 function buildShotCollisionBuckets() {
-  shotCollisionBuckets.clear();
+  releaseShotCollisionBuckets();
   const cellSize = SHOT_COLLISION_CELL_SIZE;
   for (const virus of state.viruses) {
     if (virus.dead) continue;
@@ -5065,7 +5450,12 @@ window.addEventListener("orientationchange", () => window.setTimeout(resize, 80)
 window.visualViewport?.addEventListener("resize", resize);
 window.visualViewport?.addEventListener("scroll", resize);
 window.addEventListener("pointerdown", unlockMenuAudio, { capture: true });
+window.addEventListener("pointerdown", nudgeAudioFromUserGesture, { capture: true });
 window.addEventListener("touchstart", unlockMenuAudio, { capture: true, passive: true });
+window.addEventListener("touchstart", nudgeAudioFromUserGesture, { capture: true, passive: true });
+window.addEventListener("pageshow", recoverAudioFromPageResume);
+window.addEventListener("focus", recoverAudioFromPageResume);
+document.addEventListener("visibilitychange", recoverAudioFromPageResume);
 document.addEventListener(
   "touchmove",
   (event) => {
@@ -5191,14 +5581,55 @@ function startRunFromUi(event) {
   resetGame();
 }
 
+let lastAudioToggleTouchAt = 0;
+let lastAudioToggleTouchTarget = null;
+let ignoreAudioToggleClickUntil = 0;
+
+function toggleAudioFromButton(button, options = {}) {
+  if (button === musicMuteButton) {
+    toggleMusicMuted(options);
+    return;
+  }
+  if (button === sfxMuteButton) {
+    toggleSfxMuted(options);
+  }
+}
+
+function handleAudioTogglePointerDown(event) {
+  if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+  event.preventDefault();
+  event.stopPropagation();
+  lastAudioToggleTouchAt = performance.now();
+  lastAudioToggleTouchTarget = event.currentTarget;
+  ignoreAudioToggleClickUntil = lastAudioToggleTouchAt + 1600;
+  toggleAudioFromButton(event.currentTarget, { primeSfx: true });
+}
+
+function handleAudioToggleClick(event) {
+  event?.preventDefault();
+  event?.stopPropagation();
+  const now = performance.now();
+  const wasHandledByTouch =
+    event?.currentTarget === lastAudioToggleTouchTarget && now < ignoreAudioToggleClickUntil;
+  const isSyntheticTouchClick = Boolean(event?.sourceCapabilities?.firesTouchEvents);
+  if (wasHandledByTouch) return;
+  if (isSyntheticTouchClick && isTouchDevice()) return;
+  lastAudioToggleTouchAt = 0;
+  lastAudioToggleTouchTarget = null;
+  ignoreAudioToggleClickUntil = 0;
+  toggleAudioFromButton(event.currentTarget, { primeSfx: true });
+}
+
 startButton.addEventListener("click", startRunFromUi);
 startButton.addEventListener("pointerdown", startRunFromUi);
 gameOverRestartButton.addEventListener("pointerdown", armOnScreenButton);
 gameOverRestartButton.addEventListener("click", startRunFromUi);
 pauseButton.addEventListener("click", togglePaused);
 resumeButton.addEventListener("click", () => setPaused(false));
-musicMuteButton?.addEventListener("click", toggleMusicMuted);
-sfxMuteButton?.addEventListener("click", toggleSfxMuted);
+musicMuteButton?.addEventListener("pointerdown", handleAudioTogglePointerDown);
+sfxMuteButton?.addEventListener("pointerdown", handleAudioTogglePointerDown);
+musicMuteButton?.addEventListener("click", handleAudioToggleClick);
+sfxMuteButton?.addEventListener("click", handleAudioToggleClick);
 restartButton.addEventListener("click", requestRestartRun);
 cancelRestartButton.addEventListener("click", cancelRestartRun);
 confirmRestartButton.addEventListener("click", confirmRestartRun);

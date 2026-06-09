@@ -27,7 +27,7 @@ On desktop, open the link and click **Start Run**. On phones, rotate to landscap
 - Multi-layer parallax bloodstream environment
 - Desktop controls plus landscape mobile controls with a left thumb joystick and right-side combat buttons
 - Mobile-only HUD simplification that hides the mission panel during play so the touch controls and playfield have room
-- Mobile performance path for rapid antibody fire, including optimized WebGL shot rendering and lightweight mobile combat SFX
+- Mobile performance path for rapid antibody fire, including optimized WebGL shot rendering and a buffered Web Audio combat SFX mixer
 - Layered audio with music, ambience, boss warnings, combat effects, upgrade sounds, pause sounds, separate music/effects mute buttons, and mobile combat audio ducking so shots and hits cut through the music
 
 ## Screenshots
@@ -162,8 +162,11 @@ The game uses a layered audio system:
 - Boss-warning rumble before the boss appears, then boss-loop music during the fight
 - Separate sound effects for antibody shots, hits, boss hits, boss phase changes, boss defeat, influenza replication, budding-virus split, platelet impact, player damage, player death, pause/resume, UI selection, and upgraded dash
 - Pause-menu toggles for music and effects
-- Mobile combat SFX budgeting for rapid-fire situations, using lightweight Web Audio tones for the highest-frequency shot and hit feedback on touch devices
+- Web Audio SFX buffering so combat sounds decode once, then play as lightweight scheduled buffer voices instead of many overlapping browser audio elements
+- Desktop antibody fire plays one shot sound per projectile, including spread-shot upgrades, while mobile keeps stricter rapid-fire SFX budgeting
+- Mobile combat SFX budgeting for rapid-fire situations, including voice limits, one-tap mute/unmute guards, and fallback lightweight Web Audio tones while asset buffers are still loading
 - Brief mobile music/ambience ducking when shots and hits play, so the action remains audible without returning to the stutter caused by overlapping many large audio elements
+- Mobile audio recovery after app switching, page resume, and music/effects mute toggles, which works around browsers suspending audio contexts in the background
 
 ## Performance Notes
 
@@ -174,7 +177,10 @@ The mobile build also uses a few targeted optimizations:
 - WebGL-rendered parallax layers, enemies, player sprite, and projectiles
 - Simplified mobile projectile drawing when many antibodies are active
 - Capped visible particle density on touch devices
-- Mobile-only combat SFX rate limits and Web Audio tones for rapid shot/hit sounds
+- Mobile-only combat SFX rate limits, voice caps, and decoded Web Audio buffers for rapid shot/hit sounds
+- Higher desktop shot-SFX voice budget so upgraded antibody spreads still sound responsive
+- Reused shot-collision bucket arrays during heavy firing to reduce garbage collection pressure
+- Audio resume recovery for iOS/Safari-style backgrounding, app switching, and mute/unmute edge cases
 - CSS gesture blocking and fixed viewport rules to reduce accidental zoom while tapping the Fire button
 
 The desktop build keeps the richer projectile sprites and full audio assets where performance is less constrained.
