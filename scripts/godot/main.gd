@@ -362,6 +362,7 @@ func _process(delta: float) -> void:
 	_update_banner(delta)
 	_update_pending_music(delta)
 	_refresh_gameplay_music()
+	_update_viewport_layout()
 	_update_backgrounds()
 	_update_hud()
 	_update_upgrade_pip_pulse()
@@ -573,6 +574,7 @@ func _setup_ui() -> void:
 	progress_bar.show_percentage = false
 	_style_progress_bar(progress_bar, Color(0.3, 1.0, 1.0), Color(1.0, 0.83, 0.3))
 	hud.add_child(progress_bar)
+	_update_viewport_layout()
 
 	banner_label = _label("", Vector2(390, 112), 24, Color(1.0, 0.96, 0.88))
 	banner_label.size = Vector2(500, 44)
@@ -3235,21 +3237,33 @@ func _play_ui_hover() -> void:
 	ui_hover_sound_timer = 0.08
 
 
+func _visible_game_size() -> Vector2:
+	var viewport_size = get_viewport_rect().size
+	return Vector2(maxf(BASE_SIZE.x, viewport_size.x), maxf(BASE_SIZE.y, viewport_size.y))
+
+
+func _update_viewport_layout() -> void:
+	var visible_size = _visible_game_size()
+	if progress_bar != null:
+		progress_bar.position = Vector2((visible_size.x - progress_bar.size.x) * 0.5, visible_size.y - 50.0)
+
+
 func _update_backgrounds() -> void:
+	var visible_size = _visible_game_size()
 	for holder in bg_root.get_children():
 		var speed = float(holder.get_meta("speed", 0.1))
-		var texture_size = Vector2(BASE_SIZE.x, BASE_SIZE.y)
+		var texture_size = visible_size
 		if holder.get_child_count() > 0:
 			var first_sprite = holder.get_child(0) as Sprite2D
 			if first_sprite.texture:
 				texture_size = first_sprite.texture.get_size()
-		var layer_scale = maxf(BASE_SIZE.x / texture_size.x, BASE_SIZE.y / texture_size.y)
+		var layer_scale = maxf(visible_size.x / texture_size.x, visible_size.y / texture_size.y)
 		var draw_width = texture_size.x * layer_scale
 		var draw_height = texture_size.y * layer_scale
 		var scroll_position = scroll * speed
 		var base_index = floori(scroll_position / draw_width)
 		var local_offset = -(scroll_position - float(base_index) * draw_width)
-		var y = (BASE_SIZE.y - draw_height) * 0.5
+		var y = (visible_size.y - draw_height) * 0.5
 		for i in holder.get_child_count():
 			var sprite = holder.get_child(i) as Sprite2D
 			var tile = i - 1
