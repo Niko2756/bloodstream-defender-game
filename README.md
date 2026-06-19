@@ -1,206 +1,139 @@
-# Bloodstream Defender
+# Bloodstream Defender Godot Port
 
-Bloodstream Defender is a browser-based arcade game about piloting a white blood cell through a stylized bloodstream. You dodge red blood cells and platelet clots, lock onto incoming viruses, fire Y-shaped antibody projectiles, and adapt between levels with immune-system upgrades.
+Bloodstream Defender is a 2D arcade game about piloting a white blood cell through a stylized bloodstream. You dodge red blood cells and platelet clots, neutralize viruses with Y-shaped antibodies, and adapt between vessel sections with immune-system upgrades.
 
-The project started from a simple idea: I have always wanted to make a game about what is happening inside the body. The goal is to keep the science recognizable, with white blood cells, antibodies, platelets, influenza virions, immune terms, and bloodstream motion, while still making the game feel fast, readable, and playful.
+This branch contains the Godot version of the game. The current goal is a polished Godot build with the updated themed HUD, pause menu, level-complete flow, upgrade tree, run-complete screen, parallax bloodstream background, and layered audio.
 
-## Play The Demo
+## Current Branch
 
-The easiest way to try the current build is the hosted demo:
+```text
+bloodstream-defender-godot-port
+```
 
-[https://humble-marvel-dx2j.here.now/](https://humble-marvel-dx2j.here.now/)
+This README is scoped to the Godot build only.
 
-On desktop, open the link and click **Start Run**. On phones, rotate to landscape and tap **Start Run** once so the browser can unlock music and sound effects.
+## Highlights
 
-## Project Highlights
-
-- Static HTML, CSS, and JavaScript game with no build step
-- Phaser/WebGL playfield renderer for smoother sprite, projectile, particle, and parallax performance
-- DOM-based HUD and menus so score, health, upgrades, pause controls, and run summaries stay crisp and easy to tune
-- Level-based arcade structure with escalating difficulty and late-stage boss or mini-boss encounters
-- Roguelite upgrade tree with practical immune-system abilities between levels
-- Educational mission language using terms like innate immunity, antigen, complement system, chemotaxis, phagocytosis, and adaptive immunity
-- Threat-based auto lock-on that prioritizes nearby incoming enemies without cluttering the screen with lock-on rings
-- Homing Y-shaped antibody projectiles, complement pulse, and upgraded Chemotaxis Dash
-- Influenza virions that multiply on contact and push outward, creating target-priority pressure
-- Generated bloodstream backgrounds, sprite assets, HUD ornaments, upgrade UI, and game-over report art
-- Multi-layer parallax bloodstream environment
-- Desktop controls plus landscape mobile controls with a left thumb joystick and right-side combat buttons
-- Mobile-only HUD simplification that hides the mission panel during play so the touch controls and playfield have room
-- Mobile performance path for rapid antibody fire, including optimized WebGL shot rendering and a buffered Web Audio combat SFX mixer
-- Layered audio with music, ambience, boss warnings, combat effects, upgrade sounds, pause sounds, separate music/effects mute buttons, and mobile combat audio ducking so shots and hits cut through the music
+- Godot 4.7 project with `scenes/main.tscn` as the main scene
+- Single-script gameplay runtime in `scripts/godot/main.gd`
+- Themed score, health, pause, level, progress, level-complete, pause, upgrade, and run-complete UI
+- Multi-layer parallax bloodstream background with cleaned looping layers
+- Arcade combat with homing antibody projectiles, platelet hazards, red blood cell traffic, influenza enemies, and later boss encounters
+- Roguelite adaptation tree for antibody output, complement pulse, and chemotaxis dash
+- Complement pulse that clears viruses and platelet obstructions inside its expanding sphere
+- Audio system with menu, combat, danger, upgrade, ambience, boss, pause, hit, damage, pulse, dash, and level-complete cues
+- Pause menu toggles for music and effects
+- Fullscreen-aware viewport layout so expanded windows do not leave unused dark bars
 
 ## Screenshots
 
 **Title screen**
 
-![Bloodstream Defender title screen](docs/screenshots/title-screen.png)
+![Bloodstream Defender Godot title screen](docs/screenshots/title-screen.png)
 
-**HUD, mission panel, and bloodstream playfield**
+**Active gameplay HUD**
 
-![Bloodstream Defender HUD and mission panel](docs/screenshots/gameplay-hud.png)
+![Bloodstream Defender Godot gameplay HUD](docs/screenshots/gameplay-hud.png)
 
-**Antibody projectiles**
+**Bloodstream playfield**
 
-![Bloodstream Defender firing a Y-shaped antibody projectile](docs/screenshots/antibody-shot.png)
+![Bloodstream Defender Godot bloodstream playfield](docs/screenshots/gameplay.png)
 
-**Influenza enemy mission**
+**Antibody fire**
 
-![Bloodstream Defender influenza enemy in the Influenza Bloom mission](docs/screenshots/influenza-enemy.png)
+![Bloodstream Defender Godot antibody projectiles](docs/screenshots/antibody-shot.png)
 
-**Roguelite upgrade tree**
+**Influenza enemies**
 
-![Bloodstream Defender upgrade tree](docs/screenshots/upgrade-tree.png)
+![Bloodstream Defender Godot influenza enemies](docs/screenshots/influenza-enemy.png)
 
-**Pause menu with audio controls**
+**Level complete**
 
-![Bloodstream Defender pause menu](docs/screenshots/pause-menu.png)
+![Bloodstream Defender Godot level complete screen](docs/screenshots/level-complete.png)
 
-**End-of-run summary**
+**Upgrade tree**
 
-![Bloodstream Defender immune run summary](docs/screenshots/game-over-summary.png)
+![Bloodstream Defender Godot upgrade tree](docs/screenshots/upgrade-tree.png)
 
-## Play Locally
+**Pause menu**
 
-This is a static web game. You do not need to install dependencies or run a build command, but you should serve the folder through a local web server instead of opening `index.html` directly. A local server lets the browser load JavaScript modules, images, and audio files correctly.
+![Bloodstream Defender Godot pause menu](docs/screenshots/pause-menu.png)
+
+**Run complete**
+
+![Bloodstream Defender Godot run complete screen](docs/screenshots/game-over-summary.png)
+
+## Run Locally
 
 ### Requirements
 
 - Git
-- Python 3, which is included on many systems and is only used here to serve the static files
-- A modern browser such as Chrome, Edge, Firefox, or Safari
+- Godot 4.7 or newer
 
-### Steps
+### Open In Godot
+
+1. Clone the repository.
+2. Check out the Godot branch.
+3. Open the project folder in Godot.
+4. Run the main scene.
 
 ```bash
 git clone https://github.com/Niko2756/bloodstream-defender-game.git
 cd bloodstream-defender-game
-python3 -m http.server 8000
+git checkout bloodstream-defender-godot-port
 ```
 
-Then open this address in your browser:
+The Godot project file is:
 
 ```text
-http://localhost:8000/
+project.godot
 ```
 
-If port `8000` is already in use, choose another port:
-
-```bash
-python3 -m http.server 8080
-```
-
-Then open:
+The configured main scene is:
 
 ```text
-http://localhost:8080/
-```
-
-On Windows, if `python3` is not available, try:
-
-```bash
-py -m http.server 8000
+res://scenes/main.tscn
 ```
 
 ## Controls
 
-### Desktop
-
 | Action | Input |
 | --- | --- |
 | Move | `WASD` or arrow keys |
-| Fire antibodies | `Space`, mouse click, or tap |
+| Fire antibodies | `Space` or left mouse click |
 | Chemotaxis Dash | `Shift` after choosing the Chemotaxis Dash upgrade |
 | Complement Pulse | `E`, `Q`, `Enter`, or `Numpad Enter` after choosing the Complement Pulse upgrade |
 | Pause or resume | `P`, `Escape`, or the pause button |
-| Restart run | Pause menu or end screen |
-
-### Mobile Web
-
-The mobile version is designed for landscape play.
-
-| Action | Input |
-| --- | --- |
-| Move | Left thumb joystick |
-| Fire antibodies | Hold the **Fire** button |
-| Chemotaxis Dash | Tap **Dash** after unlocking it |
-| Complement Pulse | Tap **Pulse** after unlocking it |
-| Pause or resume | Pause button in the top-right HUD |
-
-For the most full-screen iPhone experience, open the live demo in Safari, tap the Share button, and choose **Add to Home Screen**. The regular Safari and Chrome browser toolbars still take some vertical space, so the game is tuned to keep its important mobile controls and overlays reachable even inside the browser.
-
-The mission panel is intentionally hidden during landscape mobile gameplay. The level name, target count, and objective still appear through level-complete, upgrade, and boss-flow screens, while the in-game HUD stays focused on score, health, level, pause, progress, and touch controls.
+| Restart run | Pause menu or run-complete screen |
 
 ## Game Flow
 
-Each level is a vessel section with a mission objective and an immune-system term. After clearing a section, the game shows a level-complete report with score, neutralized targets, remaining health, and the next mission preview.
+Each level is a vessel section with an immune-system mission term. The player clears virions, antigens, influenza blooms, platelet hazards, and later boss threats while staying alive.
 
-The player then chooses one adaptation from the upgrade tree:
+After a level is cleared, the level-complete screen shows the mission result, score, remaining health, and the next vessel section. If adaptations remain, the player chooses one upgrade branch before continuing. If every branch is fully adapted, the level-complete button changes to **Continue** and moves straight into the next level.
 
-- **Antibody Output** improves antibody fire rate, projectile count, and antibody damage.
-- **Complement Defense** unlocks and improves the radial complement pulse.
-- **Cell Movement** unlocks and improves Chemotaxis Dash for quick repositioning.
+## Adaptations
 
-Once every upgrade branch is fully adapted, the level-complete screen changes from **Choose Adaptation** to **Continue** and sends the player straight into the next level.
-
-## Enemies And Bosses
-
-Early levels focus on readable arcade combat: incoming viruses, platelet hazards, and antibody timing. Later levels add stronger enemy mixes, influenza virions, and end-of-section boss encounters.
-
-- Influenza virions begin appearing in level 4.
-- Matching influenza virions multiply when they touch, then push outward so the bloom spreads instead of stacking in one place.
-- Boss and mini-boss encounters begin near the end of later levels, after a warning rumble.
-- Bosses are meant to act as a surprise escalation, not the entire level.
-
-## Audio
-
-The game uses a layered audio system:
-
-- Menu, vessel combat, high-danger combat, upgrade, boss-warning, and boss-loop music
-- Bloodstream ambience under active gameplay
-- Level-clear sting before upgrade music begins
-- Boss-warning rumble before the boss appears, then boss-loop music during the fight
-- Separate sound effects for antibody shots, hits, boss hits, boss phase changes, boss defeat, influenza replication, budding-virus split, platelet impact, player damage, player death, pause/resume, UI selection, and upgraded dash
-- Pause-menu toggles for music and effects
-- Web Audio SFX buffering so combat sounds decode once, then play as lightweight scheduled buffer voices instead of many overlapping browser audio elements
-- Desktop antibody fire plays one shot sound per projectile, including spread-shot upgrades, while mobile keeps stricter rapid-fire SFX budgeting
-- Mobile combat SFX budgeting for rapid-fire situations, including voice limits, one-tap mute/unmute guards, and fallback lightweight Web Audio tones while asset buffers are still loading
-- Brief mobile music/ambience ducking when shots and hits play, so the action remains audible without returning to the stutter caused by overlapping many large audio elements
-- Mobile audio recovery after app switching, page resume, and music/effects mute toggles, which works around browsers suspending audio contexts in the background
-
-## Performance Notes
-
-The prototype started as a Canvas-first game and later moved the active playfield to Phaser/WebGL while preserving the same artwork, gameplay feel, HUD, and upgrade flow. Phaser handles the sprite-heavy bloodstream scene more efficiently, especially on mobile, while the existing HTML/CSS screens keep the custom UI art and readable text.
-
-The mobile build also uses a few targeted optimizations:
-
-- WebGL-rendered parallax layers, enemies, player sprite, and projectiles
-- Simplified mobile projectile drawing when many antibodies are active
-- Capped visible particle density on touch devices
-- Mobile-only combat SFX rate limits, voice caps, and decoded Web Audio buffers for rapid shot/hit sounds
-- Higher desktop shot-SFX voice budget so upgraded antibody spreads still sound responsive
-- Reused shot-collision bucket arrays during heavy firing to reduce garbage collection pressure
-- Audio resume recovery for iOS/Safari-style backgrounding, app switching, and mute/unmute edge cases
-- CSS gesture blocking and fixed viewport rules to reduce accidental zoom while tapping the Fire button
-
-The desktop build keeps the richer projectile sprites and full audio assets where performance is less constrained.
+| Branch | Theme | Gameplay Role |
+| --- | --- | --- |
+| Rapid Antibody Factory | IgG antibodies | Faster fire rate, paired shots, stronger hits, and triple spread |
+| Complement Pulse | Complement proteins | Expanding pulse sphere that damages pathogens and destroys platelet hazards |
+| Chemotaxis Dash | Chemotaxis | Quick repositioning burst with improved recovery and safety at higher ranks |
 
 ## Project Structure
 
 ```text
 .
-├── index.html          # Game canvas, overlays, HUD, and screen markup
-├── styles.css          # HUD, menus, mobile layout, overlays, and responsive styling
-├── src/game.js         # Game loop, input, combat, spawning, level flow, audio, and drawing
-├── vendor/             # Vendored Phaser runtime used by the WebGL playfield
-├── assets/             # Runtime art, sprites, audio, UI assets, and backgrounds
-└── docs/               # Design notes, reference material, and README screenshots
+├── project.godot                 # Godot project configuration
+├── scenes/main.tscn              # Main Godot scene
+├── scripts/godot/main.gd         # Gameplay, UI, audio, spawning, and level flow
+├── assets/                       # Runtime sprites, UI art, audio, and parallax backgrounds
+├── docs/screenshots/             # README screenshots captured from the Godot build
+└── docs/                         # Godot port notes, art direction, and asset pipeline docs
 ```
 
 ## Development Notes
 
-Bloodstream Defender is still deployed as a simple static site, but the playfield now uses Phaser/WebGL for the performance-critical rendering work. The HUD, pause menu, level-complete screen, upgrade tree, and game-over report remain regular HTML/CSS so they can stay readable, accessible, and easy to iterate.
+The visual target is a readable, semi-cartoony bloodstream with strong arcade clarity: rich red plasma layers, expressive pathogens, bright platelet hazards, ornate immune-themed UI, and live Godot text for labels and numbers.
 
-The visual target is a semi-accurate, semi-cartoony bloodstream: readable biology silhouettes, expressive enemies, rich red plasma layers, and arcade-friendly combat clarity.
-
-The design direction is an educational roguelite arcade game. Each cleared vessel section introduces immune-system language, and each upgrade gives the player a practical antibody adaptation that also teaches how to use the new ability.
+When adding or revising UI art, keep generated assets modular and compose them in Godot. Avoid baked full-screen mockups when text needs to stay readable or adjustable in-engine.
