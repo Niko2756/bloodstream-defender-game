@@ -1,6 +1,9 @@
 .DS_Store
 Thumbs.db
 .herenow/
+.godot/
+.import/
+*.import
 
 # Local high-size music backups. The game uses the matching MP3 files instead.
 assets/audio/Boss loop.wav

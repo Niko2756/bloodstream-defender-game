@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bloodstream-defender-main"]
+
+[ext_resource type="Script" path="res://scripts/godot/main.gd" id="1_main"]
+
+[node name="BloodstreamDefenderGodot" type="Node2D"]
+script = ExtResource("1_main")
