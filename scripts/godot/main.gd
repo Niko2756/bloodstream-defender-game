@@ -26,6 +26,11 @@ const PLATELET_MAX_ACTIVE := 5
 const TOUCH_DEADZONE := 0.16
 const TILT_DEADZONE := 0.08
 const TILT_SENSITIVITY := 0.46
+const MOBILE_JOYSTICK_CENTER := Vector2(138.0, 558.0)
+const MOBILE_JOYSTICK_RADIUS := 76.0
+const MOBILE_JOYSTICK_KNOB_RADIUS := 26.0
+const MOBILE_JOYSTICK_TOUCH_RADIUS := 152.0
+const MOBILE_JOYSTICK_DEADZONE := 0.13
 const LOCK_TARGET_RANGE := 640.0
 const LOCK_VERTICAL_RANGE := 245.0
 
@@ -235,6 +240,7 @@ var mobile_dash_button: Button
 var mobile_pulse_button: Button
 var mobile_tilt_button: Button
 var mobile_calibrate_button: Button
+var mobile_joystick_knob: Panel
 var pause_restart_button: Button
 var music_player: AudioStreamPlayer
 var ambience_player: AudioStreamPlayer
@@ -270,6 +276,8 @@ var tilt_has_calibration = false
 var mobile_fire_held = false
 var mobile_dash_requested = false
 var mobile_pulse_requested = false
+var mobile_move_pointer_id = -1
+var mobile_move_vector = Vector2.ZERO
 var restart_confirm_pending = false
 var restart_confirm_timer = 0.0
 var current_music = ""
@@ -389,16 +397,18 @@ func _input(event: InputEvent) -> void:
 		if event.keycode in [KEY_Q, KEY_E, KEY_ENTER, KEY_KP_ENTER] and running and not paused and not waiting_for_upgrade and not game_over:
 			_trigger_pulse()
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		if running and not paused and not waiting_for_upgrade and not game_over and not _point_inside_active_ui(event.position):
+		if running and not paused and not waiting_for_upgrade and not game_over and not _point_inside_active_ui(event.position) and not _point_inside_mobile_joystick_area(event.position):
 			_fire_antibodies(true)
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _handle_mobile_move_input(event):
+		return
 	if event is InputEventScreenTouch:
 		if not _gameplay_inputs_active():
 			mobile_fire_held = false
 			return
-		if _point_inside_active_ui(event.position):
+		if _point_inside_active_ui(event.position) or _point_inside_mobile_joystick_area(event.position):
 			return
 		mobile_fire_held = event.pressed
 		if event.pressed:
@@ -1419,6 +1429,7 @@ func _make_mobile_controls() -> Control:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.visible = _should_show_mobile_controls()
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(_mobile_joystick_control())
 	var fire_button = _mobile_action_button("FIRE", Vector2(1090, 548), Vector2(150, 104), "primary")
 	mobile_fire_button = fire_button
 	fire_button.button_down.connect(func() -> void:
@@ -1449,6 +1460,54 @@ func _make_mobile_controls() -> Control:
 	return root
 
 
+func _mobile_joystick_control() -> Control:
+	var root = Control.new()
+	root.name = "MoveJoystick"
+	root.position = MOBILE_JOYSTICK_CENTER - Vector2.ONE * MOBILE_JOYSTICK_RADIUS
+	root.size = Vector2.ONE * MOBILE_JOYSTICK_RADIUS * 2.0
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var ring = Panel.new()
+	ring.name = "Ring"
+	ring.position = Vector2.ZERO
+	ring.size = root.size
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ring_style = StyleBoxFlat.new()
+	ring_style.bg_color = Color(0.01, 0.10, 0.12, 0.30)
+	ring_style.border_color = Color(0.38, 1.0, 1.0, 0.62)
+	ring_style.border_width_left = 3
+	ring_style.border_width_top = 3
+	ring_style.border_width_right = 3
+	ring_style.border_width_bottom = 3
+	ring_style.corner_radius_top_left = int(MOBILE_JOYSTICK_RADIUS)
+	ring_style.corner_radius_top_right = int(MOBILE_JOYSTICK_RADIUS)
+	ring_style.corner_radius_bottom_left = int(MOBILE_JOYSTICK_RADIUS)
+	ring_style.corner_radius_bottom_right = int(MOBILE_JOYSTICK_RADIUS)
+	ring.add_theme_stylebox_override("panel", ring_style)
+	root.add_child(ring)
+
+	var knob = Panel.new()
+	knob.name = "Knob"
+	knob.size = Vector2.ONE * MOBILE_JOYSTICK_KNOB_RADIUS * 2.0
+	knob.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var knob_style = StyleBoxFlat.new()
+	knob_style.bg_color = Color(0.72, 1.0, 0.92, 0.58)
+	knob_style.border_color = Color(1.0, 0.84, 0.36, 0.72)
+	knob_style.border_width_left = 2
+	knob_style.border_width_top = 2
+	knob_style.border_width_right = 2
+	knob_style.border_width_bottom = 2
+	knob_style.corner_radius_top_left = int(MOBILE_JOYSTICK_KNOB_RADIUS)
+	knob_style.corner_radius_top_right = int(MOBILE_JOYSTICK_KNOB_RADIUS)
+	knob_style.corner_radius_bottom_left = int(MOBILE_JOYSTICK_KNOB_RADIUS)
+	knob_style.corner_radius_bottom_right = int(MOBILE_JOYSTICK_KNOB_RADIUS)
+	knob.add_theme_stylebox_override("panel", knob_style)
+	root.add_child(knob)
+	mobile_joystick_knob = knob
+	_sync_mobile_joystick_visual()
+	return root
+
+
 func _mobile_action_button(text: String, pos: Vector2, size: Vector2, variant: String) -> Button:
 	var button = Button.new()
 	button.text = text
@@ -1467,10 +1526,58 @@ func _gameplay_inputs_active() -> bool:
 	return running and not paused and not waiting_for_upgrade and not game_over
 
 
+func _handle_mobile_move_input(event: InputEvent) -> bool:
+	if not _should_show_mobile_controls():
+		return false
+	if event is InputEventScreenTouch:
+		if event.pressed:
+			if _gameplay_inputs_active() and _point_inside_mobile_joystick_area(event.position):
+				mobile_move_pointer_id = event.index
+				_set_mobile_move_from_position(event.position)
+				return true
+		elif event.index == mobile_move_pointer_id:
+			_release_mobile_joystick()
+			return true
+	if event is InputEventScreenDrag and event.index == mobile_move_pointer_id:
+		_set_mobile_move_from_position(event.position)
+		return true
+	return false
+
+
+func _point_inside_mobile_joystick_area(point: Vector2) -> bool:
+	return mobile_controls != null and mobile_controls.visible and point.distance_to(MOBILE_JOYSTICK_CENTER) <= MOBILE_JOYSTICK_TOUCH_RADIUS
+
+
+func _set_mobile_move_from_position(point: Vector2) -> void:
+	var offset = point - MOBILE_JOYSTICK_CENTER
+	var normalized = offset / MOBILE_JOYSTICK_RADIUS
+	if normalized.length() < MOBILE_JOYSTICK_DEADZONE:
+		mobile_move_vector = Vector2.ZERO
+	else:
+		mobile_move_vector = normalized.limit_length(1.0)
+	_sync_mobile_joystick_visual()
+
+
+func _release_mobile_joystick() -> void:
+	mobile_move_pointer_id = -1
+	mobile_move_vector = Vector2.ZERO
+	_sync_mobile_joystick_visual()
+
+
+func _sync_mobile_joystick_visual() -> void:
+	if mobile_joystick_knob == null:
+		return
+	var travel = (MOBILE_JOYSTICK_RADIUS - MOBILE_JOYSTICK_KNOB_RADIUS - 8.0)
+	var local_center = Vector2.ONE * MOBILE_JOYSTICK_RADIUS
+	mobile_joystick_knob.position = local_center + mobile_move_vector.limit_length(1.0) * travel - Vector2.ONE * MOBILE_JOYSTICK_KNOB_RADIUS
+	mobile_joystick_knob.modulate.a = 0.92 if mobile_move_vector.length() > 0.01 else 0.62
+
+
 func _reset_held_action_inputs() -> void:
 	mobile_fire_held = false
 	mobile_dash_requested = false
 	mobile_pulse_requested = false
+	_release_mobile_joystick()
 	dash_input_held = false
 	horizontal_sound_input = 0
 	if mobile_fire_button != null:
@@ -1488,6 +1595,9 @@ func _update_mobile_controls() -> void:
 	mobile_controls.visible = show_controls
 	if not show_controls:
 		mobile_fire_held = false
+		_release_mobile_joystick()
+	else:
+		_sync_mobile_joystick_visual()
 	if mobile_dash_button != null:
 		var dash_ready = upgrades.dash > 0 and player.dash_cd <= 0.05 and show_controls
 		mobile_dash_button.disabled = not dash_ready
@@ -1797,6 +1907,8 @@ func _movement_input_vector() -> Vector2:
 		move.x += 1.0
 	if move.length() > 0.0:
 		return move
+	if mobile_move_vector.length() > 0.0:
+		return mobile_move_vector
 	if tilt_enabled:
 		return _read_tilt_move()
 	return Vector2.ZERO

@@ -95,6 +95,14 @@ The configured main scene is:
 res://scenes/main.tscn
 ```
 
+## iOS / App Store
+
+The recommended iOS path is the Godot export, not a web wrapper. The current iOS port notes, export-template steps, signing blockers, and App Store QA checklist are in:
+
+```text
+docs/ios-app-store-port.md
+```
+
 ## Controls
 
 | Action | Input |
