@@ -33,6 +33,10 @@ const MOBILE_JOYSTICK_TOUCH_RADIUS := 152.0
 const MOBILE_JOYSTICK_DEADZONE := 0.13
 const LOCK_TARGET_RANGE := 640.0
 const LOCK_VERTICAL_RANGE := 245.0
+const MOBILE_MAX_PARTICLES := 96
+const DESKTOP_MAX_PARTICLES := 220
+const MOBILE_PARTICLE_SCALE := 0.55
+const MOBILE_PULSE_SEGMENT_SCALE := 0.55
 
 const SPRITE_ATLAS := "res://assets/sprites/processed/bloodstream-asset-atlas-transparent-no-despill.png"
 const INFLUENZA_SHEET := "res://assets/sprites/processed/influenza-virion-spritesheet.png"
@@ -303,6 +307,8 @@ var bosses_neutralized = 0
 var score = 0
 var run_time = 0.0
 var active_mission = {}
+var mobile_performance_mode = false
+var _cached_visible_game_size := Vector2(-1.0, -1.0)
 
 var upgrades = {"rapid": 0, "pulse": 0, "dash": 0}
 
@@ -343,6 +349,9 @@ var lock_target_id = -1
 
 func _ready() -> void:
 	rng.randomize()
+	mobile_performance_mode = _is_mobile_performance_target()
+	if mobile_performance_mode:
+		Engine.max_fps = 60
 	_load_assets()
 	_setup_scene()
 	_setup_ui()
@@ -1518,8 +1527,12 @@ func _mobile_action_button(text: String, pos: Vector2, size: Vector2, variant: S
 	return button
 
 
-func _should_show_mobile_controls() -> bool:
+func _is_mobile_performance_target() -> bool:
 	return OS.has_feature("ios") or OS.has_feature("android") or OS.has_feature("web_ios") or OS.has_feature("web_android")
+
+
+func _should_show_mobile_controls() -> bool:
+	return mobile_performance_mode or _is_mobile_performance_target()
 
 
 func _gameplay_inputs_active() -> bool:
@@ -1592,28 +1605,46 @@ func _update_mobile_controls() -> void:
 	if mobile_controls == null:
 		return
 	var show_controls = _should_show_mobile_controls() and running and not paused and not waiting_for_upgrade and not game_over
-	mobile_controls.visible = show_controls
-	if not show_controls:
+	var visibility_changed = mobile_controls.visible != show_controls
+	if visibility_changed:
+		mobile_controls.visible = show_controls
+	if not show_controls and visibility_changed:
 		mobile_fire_held = false
 		_release_mobile_joystick()
-	else:
+	elif show_controls and visibility_changed:
 		_sync_mobile_joystick_visual()
 	if mobile_dash_button != null:
 		var dash_ready = upgrades.dash > 0 and player.dash_cd <= 0.05 and show_controls
-		mobile_dash_button.disabled = not dash_ready
-		mobile_dash_button.text = "DASH" if upgrades.dash > 0 else "DASH\nLOCKED"
+		var dash_disabled = not dash_ready
+		if mobile_dash_button.disabled != dash_disabled:
+			mobile_dash_button.disabled = dash_disabled
+		var dash_text = "DASH" if upgrades.dash > 0 else "DASH\nLOCKED"
+		if mobile_dash_button.text != dash_text:
+			mobile_dash_button.text = dash_text
 	if mobile_pulse_button != null:
 		var pulse_ready = upgrades.pulse > 0 and player.pulse_cd <= 0.05 and show_controls
-		mobile_pulse_button.disabled = not pulse_ready
-		mobile_pulse_button.text = "PULSE" if upgrades.pulse > 0 else "PULSE\nLOCKED"
+		var pulse_disabled = not pulse_ready
+		if mobile_pulse_button.disabled != pulse_disabled:
+			mobile_pulse_button.disabled = pulse_disabled
+		var pulse_text = "PULSE" if upgrades.pulse > 0 else "PULSE\nLOCKED"
+		if mobile_pulse_button.text != pulse_text:
+			mobile_pulse_button.text = pulse_text
 	if mobile_tilt_button != null:
-		mobile_tilt_button.visible = _should_show_mobile_controls()
-		mobile_tilt_button.text = "Tilt: On" if tilt_enabled else "Tilt: Off"
+		var show_mobile_options = _should_show_mobile_controls()
+		if mobile_tilt_button.visible != show_mobile_options:
+			mobile_tilt_button.visible = show_mobile_options
+		var tilt_text = "Tilt: On" if tilt_enabled else "Tilt: Off"
+		if mobile_tilt_button.text != tilt_text:
+			mobile_tilt_button.text = tilt_text
 	if mobile_calibrate_button != null:
-		mobile_calibrate_button.visible = _should_show_mobile_controls()
+		var show_calibrate = _should_show_mobile_controls()
+		if mobile_calibrate_button.visible != show_calibrate:
+			mobile_calibrate_button.visible = show_calibrate
 	if mobile_controls.has_node("TiltHint"):
 		var hint = mobile_controls.get_node("TiltHint") as Label
-		hint.text = "Tilt movement active" if tilt_enabled else "Tilt off"
+		var hint_text = "Tilt movement active" if tilt_enabled else "Tilt off"
+		if hint.text != hint_text:
+			hint.text = hint_text
 
 
 func _toggle_tilt_mode() -> void:
@@ -3034,10 +3065,42 @@ func _all_upgrades_complete() -> bool:
 	return upgrades.rapid >= MAX_UPGRADE_RANK and upgrades.pulse >= MAX_UPGRADE_RANK and upgrades.dash >= MAX_UPGRADE_RANK
 
 
+func _particle_budget() -> int:
+	return MOBILE_MAX_PARTICLES if mobile_performance_mode else DESKTOP_MAX_PARTICLES
+
+
+func _particle_spawn_count(count: int) -> int:
+	if not mobile_performance_mode:
+		return count
+	return maxi(1, ceili(float(count) * MOBILE_PARTICLE_SCALE))
+
+
+func _particle_segment_count(count: int) -> int:
+	if not mobile_performance_mode:
+		return count
+	return maxi(8, ceili(float(count) * MOBILE_PULSE_SEGMENT_SCALE))
+
+
+func _free_particle(particle: Dictionary) -> void:
+	var sprite = particle.get("sprite", null)
+	if is_instance_valid(sprite):
+		sprite.queue_free()
+
+
+func _append_particle(particle: Dictionary) -> void:
+	var budget = _particle_budget()
+	while particles.size() >= budget and particles.size() > 0:
+		_free_particle(particles.pop_front())
+	if budget <= 0:
+		_free_particle(particle)
+		return
+	particles.append(particle)
+
+
 func _spawn_pop(pos: Vector2, color: Color) -> void:
-	for i in 16:
+	for i in _particle_spawn_count(16):
 		var dot := _make_particle_dot(pos, color, rng.randf_range(5.0, 12.0))
-		particles.append({
+		_append_particle({
 			"pos": pos,
 			"vel": Vector2.RIGHT.rotated(rng.randf_range(0, TAU)) * rng.randf_range(100, 250),
 			"life": rng.randf_range(0.45, 0.85),
@@ -3049,10 +3112,10 @@ func _spawn_pop(pos: Vector2, color: Color) -> void:
 
 
 func _spawn_muzzle_spark(pos: Vector2, direction: Vector2) -> void:
-	for i in 7:
+	for i in _particle_spawn_count(7):
 		var dot := _make_particle_dot(pos, Color(0.42, 1.0, 1.0, 0.82), rng.randf_range(2.0, 4.0))
 		var spread = direction.rotated(rng.randf_range(-0.75, 0.75))
-		particles.append({
+		_append_particle({
 			"pos": pos,
 			"vel": spread * rng.randf_range(52.0, 130.0),
 			"life": rng.randf_range(0.16, 0.32),
@@ -3064,9 +3127,9 @@ func _spawn_muzzle_spark(pos: Vector2, direction: Vector2) -> void:
 
 
 func _spawn_hit_spark(pos: Vector2, color: Color) -> void:
-	for i in 6:
+	for i in _particle_spawn_count(6):
 		var dot := _make_particle_dot(pos, color, rng.randf_range(2.4, 5.0))
-		particles.append({
+		_append_particle({
 			"pos": pos,
 			"vel": Vector2.RIGHT.rotated(rng.randf_range(0.0, TAU)) * rng.randf_range(46.0, 125.0),
 			"life": rng.randf_range(0.18, 0.36),
@@ -3081,7 +3144,7 @@ func _spawn_dash_wake() -> void:
 	var facing = -1.0 if player_facing_left else 1.0
 	var origin = player.pos + Vector2(-facing * 38.0, rng.randf_range(-18.0, 18.0))
 	var dot := _make_particle_dot(origin, Color(0.72, 1.0, 1.0, 0.62), rng.randf_range(3.0, 6.0))
-	particles.append({
+	_append_particle({
 		"pos": origin,
 		"vel": Vector2(-facing * rng.randf_range(60.0, 145.0), rng.randf_range(-18.0, 18.0)),
 		"life": rng.randf_range(0.20, 0.38),
@@ -3095,17 +3158,19 @@ func _spawn_dash_wake() -> void:
 func _spawn_pulse_wave(pos: Vector2, radius: float, rank: int) -> void:
 	var rank_boost = _pulse_rank_boost(rank)
 	var life = _pulse_life_for_rank(rank)
-	var sphere := _make_particle_circle(pos, Color(0.24, 0.96, 1.0, 0.24), radius, 64)
-	particles.append({"pos": pos, "vel": Vector2.ZERO, "life": life, "max_life": life, "sprite": sphere, "spin": 0.0, "scale_start": 0.06, "scale_end": 1.0, "fade_power": 0.58, "dead": false})
+	var sphere := _make_particle_circle(pos, Color(0.24, 0.96, 1.0, 0.24), radius, _particle_segment_count(64))
+	_append_particle({"pos": pos, "vel": Vector2.ZERO, "life": life, "max_life": life, "sprite": sphere, "spin": 0.0, "scale_start": 0.06, "scale_end": 1.0, "fade_power": 0.58, "dead": false})
 
-	var inner_glow := _make_particle_circle(pos, Color(0.78, 1.0, 0.92, 0.20), radius * 0.54, 48)
-	particles.append({"pos": pos, "vel": Vector2.ZERO, "life": life * 0.82, "max_life": life * 0.82, "sprite": inner_glow, "spin": 0.0, "scale_start": 0.18, "scale_end": 1.16, "fade_power": 0.62, "dead": false})
+	if not mobile_performance_mode:
+		var inner_glow := _make_particle_circle(pos, Color(0.78, 1.0, 0.92, 0.20), radius * 0.54, 48)
+		_append_particle({"pos": pos, "vel": Vector2.ZERO, "life": life * 0.82, "max_life": life * 0.82, "sprite": inner_glow, "spin": 0.0, "scale_start": 0.18, "scale_end": 1.16, "fade_power": 0.62, "dead": false})
 
-	var bright_rim := _make_particle_ring(pos, Color(0.78, 1.0, 1.0, 1.0), radius, 12.0 + rank_boost * 4.0, 96)
-	particles.append({"pos": pos, "vel": Vector2.ZERO, "life": life, "max_life": life, "sprite": bright_rim, "spin": 0.0, "scale_start": 0.08, "scale_end": 1.0, "fade_power": 0.52, "dead": false})
+	var bright_rim := _make_particle_ring(pos, Color(0.78, 1.0, 1.0, 1.0), radius, 12.0 + rank_boost * 4.0, _particle_segment_count(96))
+	_append_particle({"pos": pos, "vel": Vector2.ZERO, "life": life, "max_life": life, "sprite": bright_rim, "spin": 0.0, "scale_start": 0.08, "scale_end": 1.0, "fade_power": 0.52, "dead": false})
 
-	var gold_rim := _make_particle_ring(pos, Color(1.0, 0.82, 0.34, 0.86), radius * 0.82, 5.4 + rank_boost * 1.8, 80)
-	particles.append({"pos": pos, "vel": Vector2.ZERO, "life": life * 0.92, "max_life": life * 0.92, "sprite": gold_rim, "spin": 0.0, "scale_start": 0.10, "scale_end": 1.12, "fade_power": 0.58, "dead": false})
+	if not mobile_performance_mode:
+		var gold_rim := _make_particle_ring(pos, Color(1.0, 0.82, 0.34, 0.86), radius * 0.82, 5.4 + rank_boost * 1.8, 80)
+		_append_particle({"pos": pos, "vel": Vector2.ZERO, "life": life * 0.92, "max_life": life * 0.92, "sprite": gold_rim, "spin": 0.0, "scale_start": 0.10, "scale_end": 1.12, "fade_power": 0.58, "dead": false})
 
 
 func _pulse_rank_boost(rank: int) -> float:
@@ -3356,14 +3421,16 @@ func _visible_game_size() -> Vector2:
 
 func _update_viewport_layout() -> void:
 	var visible_size = _visible_game_size()
+	if visible_size == _cached_visible_game_size:
+		return
+	_cached_visible_game_size = visible_size
 	if progress_bar != null:
 		progress_bar.position = Vector2((visible_size.x - progress_bar.size.x) * 0.5, visible_size.y - 50.0)
+	_refresh_background_layout(visible_size)
 
 
-func _update_backgrounds() -> void:
-	var visible_size = _visible_game_size()
+func _refresh_background_layout(visible_size: Vector2) -> void:
 	for holder in bg_root.get_children():
-		var speed = float(holder.get_meta("speed", 0.1))
 		var texture_size = visible_size
 		if holder.get_child_count() > 0:
 			var first_sprite = holder.get_child(0) as Sprite2D
@@ -3372,10 +3439,25 @@ func _update_backgrounds() -> void:
 		var layer_scale = maxf(visible_size.x / texture_size.x, visible_size.y / texture_size.y)
 		var draw_width = texture_size.x * layer_scale
 		var draw_height = texture_size.y * layer_scale
+		holder.set_meta("layer_scale", layer_scale)
+		holder.set_meta("draw_width", draw_width)
+		holder.set_meta("draw_y", (visible_size.y - draw_height) * 0.5)
+
+
+func _update_backgrounds() -> void:
+	var visible_size = _cached_visible_game_size
+	if visible_size.x < 0.0:
+		visible_size = _visible_game_size()
+		_cached_visible_game_size = visible_size
+		_refresh_background_layout(visible_size)
+	for holder in bg_root.get_children():
+		var speed = float(holder.get_meta("speed", 0.1))
+		var layer_scale = float(holder.get_meta("layer_scale", 1.0))
+		var draw_width = float(holder.get_meta("draw_width", visible_size.x))
 		var scroll_position = scroll * speed
 		var base_index = floori(scroll_position / draw_width)
 		var local_offset = -(scroll_position - float(base_index) * draw_width)
-		var y = (visible_size.y - draw_height) * 0.5
+		var y = float(holder.get_meta("draw_y", 0.0))
 		for i in holder.get_child_count():
 			var sprite = holder.get_child(i) as Sprite2D
 			var tile = i - 1
@@ -3385,32 +3467,47 @@ func _update_backgrounds() -> void:
 			sprite.scale = Vector2(-layer_scale if mirrored else layer_scale, layer_scale)
 
 
+func _set_label_text_if_changed(label: Label, text: String) -> void:
+	if label != null and label.text != text:
+		label.text = text
+
+
 func _update_hud() -> void:
-	score_label.text = "%s" % score
-	health_bar.value = clampf(player.health, 0.0, PLAYER_MAX_HEALTH)
-	level_label.text = "%s" % level
+	_set_label_text_if_changed(score_label, "%s" % score)
+	if health_bar != null:
+		var health_value = clampf(player.health, 0.0, PLAYER_MAX_HEALTH)
+		if absf(float(health_bar.value) - health_value) > 0.05:
+			health_bar.value = health_value
+	_set_label_text_if_changed(level_label, "%s" % level)
 	if mission_label != null:
-		mission_label.text = active_mission.get("name", "")
+		_set_label_text_if_changed(mission_label, str(active_mission.get("name", "")))
 	if mission_objective_label != null:
-		mission_objective_label.text = active_mission.get("objective", "")
+		_set_label_text_if_changed(mission_objective_label, str(active_mission.get("objective", "")))
 	if target_label != null:
 		var remaining = max(0, level_goal - level_kills)
+		var target_text = ""
 		if _is_encounter_level():
 			var boss = _active_boss()
 			if boss.size() > 0:
-				target_label.text = "%s integrity left" % ceili(float(boss.hp))
+				target_text = "%s integrity left" % ceili(float(boss.hp))
 			elif boss_warning_started and not boss_spawned:
-				target_label.text = "Pathogen signal building"
+				target_text = "Pathogen signal building"
 			else:
-				target_label.text = "%s %s left" % [remaining, active_mission.get("target", "virions")]
+				target_text = "%s %s left" % [remaining, active_mission.get("target", "virions")]
 		else:
-			target_label.text = "%s %s left" % [remaining, active_mission.get("target", "virions")]
-	progress_bar.value = _combined_level_progress() * 100.0
+			target_text = "%s %s left" % [remaining, active_mission.get("target", "virions")]
+		_set_label_text_if_changed(target_label, target_text)
+	if progress_bar != null:
+		var progress_value = _combined_level_progress() * 100.0
+		if absf(float(progress_bar.value) - progress_value) > 0.05:
+			progress_bar.value = progress_value
 	if dash_label != null:
-		dash_label.text = _ability_status_short("dash")
+		_set_label_text_if_changed(dash_label, _ability_status_short("dash"))
 	if pulse_label != null:
-		pulse_label.text = _ability_status_short("pulse")
-	player.sprite.visible = running and not game_over
+		_set_label_text_if_changed(pulse_label, _ability_status_short("pulse"))
+	var player_visible = running and not game_over
+	if is_instance_valid(player.sprite) and player.sprite.visible != player_visible:
+		player.sprite.visible = player_visible
 
 
 func _ability_status(id: String) -> String:
