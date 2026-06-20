@@ -4,6 +4,8 @@ Thumbs.db
 .godot/
 .import/
 *.import
+build/*
+!build/.gdignore
 
 # Local high-size music backups. The game uses the matching MP3 files instead.
 assets/audio/Boss loop.wav
