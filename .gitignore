@@ -6,6 +6,8 @@ Thumbs.db
 *.import
 build/*
 !build/.gdignore
+native-ios/DerivedData*/
+native-ios/SwiftModuleCache/
 
 # Local high-size music backups. The game uses the matching MP3 files instead.
 assets/audio/Boss loop.wav

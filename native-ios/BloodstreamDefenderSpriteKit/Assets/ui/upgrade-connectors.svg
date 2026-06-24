@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 210" fill="none">
+  <defs>
+    <filter id="glow" x="-12%" y="-42%" width="124%" height="184%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.2 0 0 0 0 0.95 0 0 0 0 1 0 0 0 0.9 0" result="cyanBlur"/>
+      <feMerge>
+        <feMergeNode in="cyanBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <linearGradient id="cyanStroke" x1="128" y1="34" x2="1072" y2="34" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#49e5ff" stop-opacity="0"/>
+      <stop offset="0.16" stop-color="#69f7ff"/>
+      <stop offset="0.5" stop-color="#a9ffff"/>
+      <stop offset="0.84" stop-color="#69f7ff"/>
+      <stop offset="1" stop-color="#49e5ff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <g filter="url(#glow)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M600 2 C600 31 600 42 600 56" stroke="#76ffff" stroke-width="9" opacity="0.85"/>
+    <path d="M600 52 C488 86 353 48 235 83 C192 96 184 129 184 160" stroke="url(#cyanStroke)" stroke-width="7"/>
+    <path d="M600 52 C600 81 600 119 600 160" stroke="#76ffff" stroke-width="7" opacity="0.9"/>
+    <path d="M600 52 C712 86 847 48 965 83 C1008 96 1016 129 1016 160" stroke="url(#cyanStroke)" stroke-width="7"/>
+    <path d="M184 160 L184 205" stroke="#72faff" stroke-width="5" opacity="0.82"/>
+    <path d="M600 160 L600 205" stroke="#d57aff" stroke-width="5" opacity="0.82"/>
+    <path d="M1016 160 L1016 205" stroke="#80ffc4" stroke-width="5" opacity="0.82"/>
+    <circle cx="600" cy="56" r="16" fill="#5effff" opacity="0.82"/>
+    <circle cx="184" cy="160" r="7" fill="#76ffff"/>
+    <circle cx="600" cy="160" r="7" fill="#d57aff"/>
+    <circle cx="1016" cy="160" r="7" fill="#80ffc4"/>
+    <circle cx="390" cy="64" r="5" fill="#ffd06e"/>
+    <circle cx="810" cy="64" r="5" fill="#ffd06e"/>
+  </g>
+</svg>
