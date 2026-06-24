@@ -117,6 +117,8 @@ private struct Constants {
     static let cosmeticHitFlashFrameBudget = 14
     static let cosmeticHitFlashFrameBudgetUnderLoad = 5
     static let sparkNodeName = "pooledSpark"
+    static let tiltCalibrationToastActionKey = "tiltCalibrationToast"
+    static let tiltCalibrateButtonResetActionKey = "tiltCalibrateButtonReset"
     static let maxUpgradeRank = 4
     static let dangerMusicThreshold: CGFloat = 0.42
     static let dangerMusicResetRatio: CGFloat = 0.72
@@ -784,6 +786,9 @@ final class GameScene: SKScene {
     private var sfxToggleLabel: SKLabelNode?
     private var tiltToggleLabel: SKLabelNode?
     private var tiltCalibrateLabel: SKLabelNode?
+    private var tiltCalibrationToast = SKNode()
+    private var tiltCalibrationToastFrame: SKShapeNode?
+    private var tiltCalibrationToastLabel: SKLabelNode?
     private var restartConfirmOverlay = SKNode()
     private var restartConfirmButton = SKShapeNode()
     private var restartCancelButton = SKShapeNode()
@@ -980,7 +985,8 @@ final class GameScene: SKScene {
                     toggleTiltMode()
                     audio.playSFX(.uiSelect)
                 } else if tiltCalibrateButton.contains(stagePoint) {
-                    calibrateTilt(showBannerText: true)
+                    let calibrated = calibrateTilt(showBannerText: false)
+                    showTiltCalibrationFeedback(success: calibrated)
                     audio.playSFX(.uiSelect)
                 }
                 continue
@@ -1555,6 +1561,8 @@ final class GameScene: SKScene {
         tiltCalibrateButton = calibrate.shape
         tiltCalibrateLabel = calibrate.label
 
+        setupTiltCalibrationToast(center: CGPoint(x: pauseContentX, y: 502))
+
         let restart = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 558), size: CGSize(width: 192, height: 42), title: "Restart Run", fontSize: 15)
         restartButton = restart.shape
 
@@ -1564,6 +1572,31 @@ final class GameScene: SKScene {
 
         pauseOverlay.isHidden = true
         overlayNode.addChild(pauseOverlay)
+    }
+
+    private func setupTiltCalibrationToast(center: CGPoint) {
+        tiltCalibrationToast.removeAllChildren()
+        tiltCalibrationToast.removeAllActions()
+        tiltCalibrationToast.position = baseToStage(center)
+        tiltCalibrationToast.zPosition = ZLayer.overlay + 70
+        tiltCalibrationToast.alpha = 0
+        tiltCalibrationToast.isHidden = true
+        tiltCalibrationToast.setScale(1.0)
+
+        let frame = SKShapeNode(rectOf: CGSize(width: 188, height: 58), cornerRadius: 18)
+        frame.fillColor = UIColor(red: 0.02, green: 0.0, blue: 0.03, alpha: 0.94)
+        frame.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.95)
+        frame.lineWidth = 2
+        frame.glowWidth = 6
+        tiltCalibrationToast.addChild(frame)
+        tiltCalibrationToastFrame = frame
+
+        let text = label("CENTERED", size: 20, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
+        text.position = .zero
+        tiltCalibrationToast.addChild(text)
+        tiltCalibrationToastLabel = text
+
+        pauseOverlay.addChild(tiltCalibrationToast)
     }
 
     private func setupRestartConfirmOverlay() {
@@ -1749,87 +1782,97 @@ final class GameScene: SKScene {
     private func setupGameOverOverlay() {
         gameOverOverlay.removeAllChildren()
         gameOverStatLabels.removeAll()
+        gameOverAdaptationsLabel = nil
         gameOverOverlay.addChild(overlayShade(alpha: 0.66))
+
+        let panelCenter = CGPoint(x: 640, y: 364)
+        let panelScale: CGFloat = 1.10
+        func panelPoint(_ point: CGPoint) -> CGPoint {
+            CGPoint(
+                x: panelCenter.x + (point.x - panelCenter.x) * panelScale,
+                y: panelCenter.y + (point.y - panelCenter.y) * panelScale
+            )
+        }
 
         if let gameOverPanelTexture {
             let panel = SKSpriteNode(texture: gameOverPanelTexture)
-            panel.position = baseToStage(CGPoint(x: 640, y: 364))
-            panel.size = CGSize(width: 860, height: 484)
+            panel.position = baseToStage(panelCenter)
+            panel.size = CGSize(width: 860 * panelScale, height: 484 * panelScale)
             panel.zPosition = ZLayer.overlay + 1
             gameOverOverlay.addChild(panel)
         } else {
-            let panel = SKShapeNode(rectOf: CGSize(width: 860, height: 484), cornerRadius: 24)
+            let panel = SKShapeNode(rectOf: CGSize(width: 860 * panelScale, height: 484 * panelScale), cornerRadius: 24 * panelScale)
             panel.fillColor = UIColor(red: 0.05, green: 0.00, blue: 0.03, alpha: 0.86)
             panel.strokeColor = UIColor(red: 1.0, green: 0.52, blue: 0.42, alpha: 0.78)
             panel.lineWidth = 3
-            panel.position = baseToStage(CGPoint(x: 640, y: 364))
+            panel.position = baseToStage(panelCenter)
             gameOverOverlay.addChild(panel)
         }
 
-        let title = label("IMMUNE RUN COMPLETE", size: 26, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
-        title.position = baseToStage(CGPoint(x: 640, y: 220))
+        let title = label("IMMUNE RUN COMPLETE", size: 24 * panelScale, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        title.position = baseToStage(panelPoint(CGPoint(x: 640, y: 222)))
         gameOverOverlay.addChild(title)
 
-        let subtitle = label("", size: 9, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
-        subtitle.position = baseToStage(CGPoint(x: 640, y: 252))
+        let subtitle = label("", size: 9 * panelScale, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        subtitle.position = baseToStage(panelPoint(CGPoint(x: 640, y: 254)))
         gameOverOverlay.addChild(subtitle)
         gameOverSubtitleLabel = subtitle
 
-        let record = label("", size: 12, color: UIColor(red: 1.0, green: 0.82, blue: 0.34, alpha: 1.0))
-        record.position = baseToStage(CGPoint(x: 640, y: 284))
+        let rightBoxTextX: CGFloat = 686
+
+        let record = multilineLabel("", size: 6.7 * panelScale, color: UIColor(red: 1.0, green: 0.82, blue: 0.34, alpha: 1.0), width: 172 * panelScale, lines: 3)
+        record.horizontalAlignmentMode = .left
+        record.position = baseToStage(panelPoint(CGPoint(x: rightBoxTextX, y: 456)))
         gameOverOverlay.addChild(record)
         gameOverRecordLabel = record
 
-        let statDefs: [(String, String, CGPoint)] = [
-            ("score", "FINAL SCORE", CGPoint(x: 418, y: 320)),
-            ("level", "LEVEL REACHED", CGPoint(x: 418, y: 382)),
-            ("sections", "SECTIONS CLEARED", CGPoint(x: 418, y: 444)),
-            ("virions", "VIRIONS NEUTRALIZED", CGPoint(x: 418, y: 506))
+        let leftStatTextX: CGFloat = 446
+        let statDefs: [(key: String, title: String, titleY: CGFloat, valueY: CGFloat)] = [
+            ("score", "FINAL SCORE", 309, 322),
+            ("level", "LEVEL REACHED", 357, 370),
+            ("sections", "SECTIONS CLEARED", 405, 418),
+            ("virions", "VIRIONS NEUTRALIZED", 453, 466)
         ]
 
-        for (key, title, point) in statDefs {
-            let titleLabel = label(title, size: 7, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
+        for (key, title, titleY, valueY) in statDefs {
+            let titleLabel = label(title, size: 5.8 * panelScale, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
             titleLabel.horizontalAlignmentMode = .left
-            titleLabel.position = baseToStage(point)
+            titleLabel.position = baseToStage(panelPoint(CGPoint(x: leftStatTextX, y: titleY)))
             gameOverOverlay.addChild(titleLabel)
 
-            let value = label("0", size: 18, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
+            let value = label("0", size: 14.5 * panelScale, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
             value.horizontalAlignmentMode = .left
-            value.position = baseToStage(CGPoint(x: point.x, y: point.y + 22))
+            value.position = baseToStage(panelPoint(CGPoint(x: leftStatTextX, y: valueY)))
             gameOverOverlay.addChild(value)
             gameOverStatLabels[key] = value
         }
 
         let detailDefs: [(String, String, CGPoint)] = [
-            ("time", "SURVIVAL TIME", CGPoint(x: 796, y: 348)),
-            ("bosses", "BOSSES NEUTRALIZED", CGPoint(x: 796, y: 418))
+            ("time", "SURVIVAL TIME", CGPoint(x: rightBoxTextX, y: 338)),
+            ("bosses", "BOSSES NEUTRALIZED", CGPoint(x: rightBoxTextX, y: 392))
         ]
 
         for (key, title, point) in detailDefs {
-            let titleLabel = label(title, size: 7, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
+            let titleLabel = label(title, size: 7 * panelScale, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
             titleLabel.horizontalAlignmentMode = .left
-            titleLabel.position = baseToStage(point)
+            titleLabel.position = baseToStage(panelPoint(point))
             gameOverOverlay.addChild(titleLabel)
 
-            let value = label("0", size: key == "time" ? 21 : 19, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
+            let value = label("0", size: (key == "time" ? 21 : 19) * panelScale, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
             value.horizontalAlignmentMode = .left
-            value.position = baseToStage(CGPoint(x: point.x, y: point.y + 24))
+            value.position = baseToStage(panelPoint(CGPoint(x: point.x, y: point.y + 24)))
             gameOverOverlay.addChild(value)
             gameOverStatLabels[key] = value
         }
 
-        let adaptTitle = label("ADAPTATIONS", size: 7, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
-        adaptTitle.horizontalAlignmentMode = .left
-        adaptTitle.position = baseToStage(CGPoint(x: 796, y: 494))
-        gameOverOverlay.addChild(adaptTitle)
-
-        let adaptations = multilineLabel("No adaptations selected", size: 9, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0), width: 180, lines: 3)
-        adaptations.horizontalAlignmentMode = .left
-        adaptations.position = baseToStage(CGPoint(x: 796, y: 526))
-        gameOverOverlay.addChild(adaptations)
-        gameOverAdaptationsLabel = adaptations
-
-        let tryAgain = addArtButton(to: gameOverOverlay, center: CGPoint(x: 640, y: 518), size: CGSize(width: 262, height: 46), title: "TRY AGAIN", fontSize: 18)
+        let tryAgain = addArtButton(
+            to: gameOverOverlay,
+            center: panelPoint(CGPoint(x: 638, y: 527)),
+            size: CGSize(width: 270 * panelScale, height: 46 * panelScale),
+            title: "TRY AGAIN",
+            fontSize: 18 * panelScale,
+            drawFrame: false
+        )
         tryAgainButton = tryAgain.shape
         gameOverOverlay.isHidden = true
         overlayNode.addChild(gameOverOverlay)
@@ -2323,6 +2366,7 @@ final class GameScene: SKScene {
             fireTouchIds.removeAll()
             clearScreenShake()
             updateJoystickVisual()
+            resetTiltCalibrationFeedback()
             updatePauseToggleLabels()
             audio.playSFX(.pauseOpen)
             audio.pauseMusic()
@@ -2332,11 +2376,63 @@ final class GameScene: SKScene {
             pauseOverlay.isHidden = true
             restartConfirmVisible = false
             restartConfirmOverlay.isHidden = true
+            resetTiltCalibrationFeedback()
             audio.resumeMusic()
             if shouldPlayVeinAmbience() {
                 audio.playAmbience()
             }
         }
+    }
+
+    private func showTiltCalibrationFeedback(success: Bool) {
+        let text = success ? "CENTERED" : "NO TILT SIGNAL"
+        let strokeColor = success
+            ? UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.95)
+            : UIColor(red: 1.0, green: 0.42, blue: 0.30, alpha: 0.96)
+        let textColor = success
+            ? UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0)
+            : UIColor(red: 1.0, green: 0.82, blue: 0.64, alpha: 1.0)
+
+        tiltCalibrationToast.removeAction(forKey: Constants.tiltCalibrationToastActionKey)
+        tiltCalibrationToastLabel?.text = text
+        tiltCalibrationToastLabel?.fontColor = textColor
+        tiltCalibrationToastFrame?.strokeColor = strokeColor
+        tiltCalibrationToast.isHidden = false
+        tiltCalibrationToast.alpha = 0
+        tiltCalibrationToast.setScale(0.92)
+        tiltCalibrationToast.run(.sequence([
+            .group([
+                .fadeIn(withDuration: 0.14),
+                .scale(to: 1.0, duration: 0.14)
+            ]),
+            .wait(forDuration: 1.35),
+            .group([
+                .fadeOut(withDuration: 0.35),
+                .scale(to: 1.04, duration: 0.35)
+            ]),
+            .run { [weak self] in
+                self?.tiltCalibrationToast.isHidden = true
+                self?.tiltCalibrationToast.setScale(1.0)
+            }
+        ]), withKey: Constants.tiltCalibrationToastActionKey)
+
+        tiltCalibrateLabel?.removeAction(forKey: Constants.tiltCalibrateButtonResetActionKey)
+        tiltCalibrateLabel?.text = success ? "Centered" : "Unavailable"
+        tiltCalibrateLabel?.run(.sequence([
+            .wait(forDuration: 1.1),
+            .run { [weak self] in
+                self?.tiltCalibrateLabel?.text = "Calibrate"
+            }
+        ]), withKey: Constants.tiltCalibrateButtonResetActionKey)
+    }
+
+    private func resetTiltCalibrationFeedback() {
+        tiltCalibrationToast.removeAction(forKey: Constants.tiltCalibrationToastActionKey)
+        tiltCalibrationToast.alpha = 0
+        tiltCalibrationToast.isHidden = true
+        tiltCalibrationToast.setScale(1.0)
+        tiltCalibrateLabel?.removeAction(forKey: Constants.tiltCalibrateButtonResetActionKey)
+        tiltCalibrateLabel?.text = "Calibrate"
     }
 
     private func endRun() {
@@ -3471,12 +3567,13 @@ final class GameScene: SKScene {
     private func updateGameOverOverlay() {
         gameOverSubtitleLabel?.text = "Run ended during \(activeMission.name): \(activeMission.term)."
         let best = profileStore.bestRun
+        let adaptations = compactAdaptationSummary()
         if lastRunWasBest {
-            gameOverRecordLabel?.text = "NEW BEST RUN SAVED"
+            gameOverRecordLabel?.text = "NEW BEST RUN\n\(score) pts | Lv \(level) | \(formatTime(runTime))\n\(adaptations)"
         } else if profileStore.hasBestRun {
-            gameOverRecordLabel?.text = "Best \(best.score) | Level \(best.level) | \(formatTime(best.survivalTime))"
+            gameOverRecordLabel?.text = "BEST RUN\n\(best.score) pts | Lv \(best.level) | \(formatTime(best.survivalTime))\n\(adaptations)"
         } else {
-            gameOverRecordLabel?.text = ""
+            gameOverRecordLabel?.text = "RUN SUMMARY\nNo saved best yet\n\(adaptations)"
         }
         gameOverStatLabels["score"]?.text = "\(score)"
         gameOverStatLabels["level"]?.text = "\(level)"
@@ -3484,7 +3581,15 @@ final class GameScene: SKScene {
         gameOverStatLabels["virions"]?.text = "\(totalKills)"
         gameOverStatLabels["bosses"]?.text = "\(bossesNeutralized)"
         gameOverStatLabels["time"]?.text = formatTime(runTime)
-        gameOverAdaptationsLabel?.text = adaptationSummary()
+        gameOverAdaptationsLabel?.text = adaptations
+    }
+
+    private func compactAdaptationSummary() -> String {
+        let summary = adaptationSummary()
+        if summary == "No adaptations selected" {
+            return "No adaptations"
+        }
+        return summary.replacingOccurrences(of: "  |  ", with: " | ")
     }
 
     private func rank(for choice: UpgradeChoice) -> Int {
@@ -3549,7 +3654,8 @@ final class GameScene: SKScene {
         }
     }
 
-    private func calibrateTilt(showBannerText: Bool) {
+    @discardableResult
+    private func calibrateTilt(showBannerText: Bool) -> Bool {
         startMotionInputIfNeeded()
         guard let sensor = rawTiltSensor(), vectorLength(sensor) > 0.001 else {
             tiltHasCalibration = false
@@ -3558,16 +3664,14 @@ final class GameScene: SKScene {
             if showBannerText {
                 showBanner("Tilt sensor unavailable here")
             }
-            return
+            return false
         }
 
         tiltNeutral = sensor
         tiltHasCalibration = true
         tiltVector = .zero
         updateJoystickVisual()
-        if showBannerText {
-            showBanner("Tilt center calibrated")
-        }
+        return true
     }
 
     private func updateTiltVector(delta: TimeInterval) {
@@ -3756,7 +3860,11 @@ final class GameScene: SKScene {
     }
 
     private func toggleTiltMode() {
-        setTiltEnabled(!tiltEnabled, showBannerText: true)
+        let enablingTilt = !tiltEnabled
+        setTiltEnabled(enablingTilt, showBannerText: false)
+        if enablingTilt {
+            showTiltCalibrationFeedback(success: tiltHasCalibration)
+        }
     }
 
     private func updatePauseToggleLabels() {
@@ -4619,9 +4727,10 @@ final class GameScene: SKScene {
         center: CGPoint,
         size: CGSize,
         title: String,
-        fontSize: CGFloat
+        fontSize: CGFloat,
+        drawFrame: Bool = true
     ) -> (shape: SKShapeNode, label: SKLabelNode) {
-        if let pauseCompleteTexture {
+        if drawFrame, let pauseCompleteTexture {
             let frame = SKSpriteNode(texture: regionTexture(from: pauseCompleteTexture, frame: AtlasFrames.buttonFrame))
             frame.position = baseToStage(center)
             frame.size = CGSize(width: size.width + 30, height: size.height + 10)

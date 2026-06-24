@@ -10,10 +10,6 @@ final class GameViewController: UIViewController {
         skView.backgroundColor = .black
         skView.ignoresSiblingOrder = true
         skView.preferredFramesPerSecond = 60
-#if DEBUG
-        skView.showsFPS = true
-        skView.showsNodeCount = true
-#endif
         view = skView
     }
 
@@ -70,4 +66,3 @@ final class GameViewController: UIViewController {
         }
     }
 }
-

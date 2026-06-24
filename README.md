@@ -17,9 +17,19 @@ This branch is focused on the native iOS rebuild. The older Godot project in the
 
 ## Screenshots
 
-Screenshots are intentionally pending while the HUD is still being tuned. Current Debug simulator captures show SpriteKit FPS/node overlays, and some HUD elements are still in active revision, so this README avoids using misleading screenshots for now.
+Captured from the native iOS build running on the iPhone 17 Pro simulator.
 
-For a clean later pass, capture from a Release build or disable the Debug `showsFPS` / `showsNodeCount` overlay in `native-ios/BloodstreamDefenderSpriteKit/GameViewController.swift`.
+| Title | Gameplay |
+| --- | --- |
+| <img src="docs/screenshots/title-screen.png" alt="Bloodstream Defender title screen" width="420"> | <img src="docs/screenshots/gameplay-hud.png" alt="Bloodstream Defender gameplay HUD" width="420"> |
+
+| Upgrade Paths | Pause Settings |
+| --- | --- |
+| <img src="docs/screenshots/upgrade-tree.png" alt="Choose an upgrade path screen" width="420"> | <img src="docs/screenshots/pause-menu.png" alt="Pause settings screen" width="420"> |
+
+| Run Summary |
+| --- |
+| <img src="docs/screenshots/game-over-summary.png" alt="Immune run complete summary screen" width="420"> |
 
 ## Features
 
