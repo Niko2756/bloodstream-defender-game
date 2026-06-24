@@ -1,147 +1,128 @@
-# Bloodstream Defender Godot Port
+# Bloodstream Defender for iOS
 
-Bloodstream Defender is a 2D arcade game about piloting a white blood cell through a stylized bloodstream. You dodge red blood cells and platelet clots, neutralize viruses with Y-shaped antibodies, and adapt between vessel sections with immune-system upgrades.
+Bloodstream Defender is a native iOS/SpriteKit arcade game about piloting a white blood cell through a stylized bloodstream. You dodge red blood cells and platelet clots, neutralize viruses with Y-shaped antibodies, survive escalating vessel sections, and adapt between missions with immune-system upgrades.
 
-This branch contains the Godot version of the game. The current goal is a polished Godot build with the updated themed HUD, pause menu, level-complete flow, upgrade tree, run-complete screen, parallax bloodstream background, and layered audio.
+This branch is focused on the native iOS rebuild. The older Godot project in the repository is kept as the reference blueprint, but this README documents the SpriteKit app only.
 
-## Current Branch
+## Current Status
 
-```text
-bloodstream-defender-godot-port
-```
-
-This README is scoped to the Godot build only.
-
-## Highlights
-
-- Godot 4.7 project with `scenes/main.tscn` as the main scene
-- Single-script gameplay runtime in `scripts/godot/main.gd`
-- Themed score, health, pause, level, progress, level-complete, pause, upgrade, and run-complete UI
-- Multi-layer parallax bloodstream background with cleaned looping layers
-- Arcade combat with homing antibody projectiles, platelet hazards, red blood cell traffic, influenza enemies, and later boss encounters
-- Roguelite adaptation tree for antibody output, complement pulse, and chemotaxis dash
-- Complement pulse that clears viruses and platelet obstructions inside its expanding sphere
-- Audio system with menu, combat, danger, upgrade, ambience, boss, pause, hit, damage, pulse, dash, and level-complete cues
-- Pause menu toggles for music and effects
-- Fullscreen-aware viewport layout so expanded windows do not leave unused dark bars
+- Playable native SpriteKit rebuild for iPhone.
+- Active Xcode project: `native-ios/BloodstreamDefenderSpriteKit.xcodeproj`.
+- Bundle identifier: `com.niko.bloodstreamdefender.spritekit`.
+- Primary simulator target: iPhone 17 Pro.
+- Deployment target: iOS 18.0.
+- App version: `0.1`.
+- Rendering stack: UIKit `SKView` plus SpriteKit scene.
+- Current polish focus: HUD spacing, mission progress frame, ability button layering, and high-level performance under dense enemy/projectile load.
 
 ## Screenshots
 
-**Title screen**
+Screenshots are intentionally pending while the HUD is still being tuned. Current Debug simulator captures show SpriteKit FPS/node overlays, and some HUD elements are still in active revision, so this README avoids using misleading screenshots for now.
 
-![Bloodstream Defender Godot title screen](docs/screenshots/title-screen.png)
+For a clean later pass, capture from a Release build or disable the Debug `showsFPS` / `showsNodeCount` overlay in `native-ios/BloodstreamDefenderSpriteKit/GameViewController.swift`.
 
-**Active gameplay HUD**
+## Features
 
-![Bloodstream Defender Godot gameplay HUD](docs/screenshots/gameplay-hud.png)
-
-**Bloodstream playfield**
-
-![Bloodstream Defender Godot bloodstream playfield](docs/screenshots/gameplay.png)
-
-**Antibody fire**
-
-![Bloodstream Defender Godot antibody projectiles](docs/screenshots/antibody-shot.png)
-
-**Influenza enemies**
-
-![Bloodstream Defender Godot influenza enemies](docs/screenshots/influenza-enemy.png)
-
-**Level complete**
-
-![Bloodstream Defender Godot level complete screen](docs/screenshots/level-complete.png)
-
-**Upgrade tree**
-
-![Bloodstream Defender Godot upgrade tree](docs/screenshots/upgrade-tree.png)
-
-**Pause menu**
-
-![Bloodstream Defender Godot pause menu](docs/screenshots/pause-menu.png)
-
-**Run complete**
-
-![Bloodstream Defender Godot run complete screen](docs/screenshots/game-over-summary.png)
-
-## Run Locally
-
-### Requirements
-
-- Git
-- Godot 4.7 or newer
-
-### Open In Godot
-
-1. Clone the repository.
-2. Check out the Godot branch.
-3. Open the project folder in Godot.
-4. Run the main scene.
-
-```bash
-git clone https://github.com/Niko2756/bloodstream-defender-game.git
-cd bloodstream-defender-game
-git checkout bloodstream-defender-godot-port
-```
-
-The Godot project file is:
-
-```text
-project.godot
-```
-
-The configured main scene is:
-
-```text
-res://scenes/main.tscn
-```
-
-## iOS / App Store
-
-The recommended iOS path is the Godot export, not a web wrapper. The current iOS port notes, export-template steps, signing blockers, and App Store QA checklist are in:
-
-```text
-docs/ios-app-store-port.md
-```
+- Full-screen landscape SpriteKit gameplay.
+- Layered parallax bloodstream background rebuilt from the reference project assets.
+- White blood cell player with touch joystick, touch fire, dash, pulse, and optional tilt movement.
+- Antibody projectiles with homing, rapid-fire upgrades, paired shots, stronger hits, and spread behavior.
+- Regular enemy mix including basic viruses, fast variants, tank variants, budding viruses, and influenza replication.
+- Platelet obstacles with collision damage, crack feedback, dash breaking, and pulse breaking.
+- Boss encounters for Pox-Brick, Adenovirus, and Filovirus profiles.
+- Level progression with mission names, target counts, section clear tracking, score, health, and best-run persistence.
+- Upgrade branches for Rapid Antibody Factory, Complement Pulse, and Chemotaxis Dash.
+- Pause/settings flow with music, effects, tilt toggle, calibration, and restart confirmation.
+- Menu, combat, danger, boss, upgrade, ambience, hit, dash, pulse, pause, and completion audio.
+- Performance work for busy higher levels, including projectile pooling, spark pooling, effect budgeting, and offscreen spawn fixes.
 
 ## Controls
+
+### iPhone
+
+| Action | Input |
+| --- | --- |
+| Move | Touch joystick or optional tilt controls |
+| Fire antibodies | Fire touch region/button |
+| Chemotaxis Dash | Dash button after unlocking the upgrade |
+| Complement Pulse | Pulse button after unlocking the upgrade |
+| Pause/settings | Pause button |
+
+### Simulator Keyboard
 
 | Action | Input |
 | --- | --- |
 | Move | `WASD` or arrow keys |
-| Fire antibodies | `Space` or left mouse click |
-| Chemotaxis Dash | `Shift` after choosing the Chemotaxis Dash upgrade |
-| Complement Pulse | `E`, `Q`, `Enter`, or `Numpad Enter` after choosing the Complement Pulse upgrade |
-| Pause or resume | `P`, `Escape`, or the pause button |
-| Restart run | Pause menu or run-complete screen |
+| Fire antibodies | `Space` |
+| Chemotaxis Dash | `Shift` after unlocking the upgrade |
+| Complement Pulse | `Q`, `E`, or `Return` after unlocking the upgrade |
+| Pause/resume | `P` |
+| Restart from pause/summary/upgrade/complete screens | `R` |
 
-## Game Flow
+Debug builds also include shortcut keys for faster testing: `U` opens upgrades, `N` advances to the next level, `B` jumps toward a boss warning, `L` completes the current level, and `G` opens the run-complete summary.
 
-Each level is a vessel section with an immune-system mission term. The player clears virions, antigens, influenza blooms, platelet hazards, and later boss threats while staying alive.
+## Build And Run
 
-After a level is cleared, the level-complete screen shows the mission result, score, remaining health, and the next vessel section. If adaptations remain, the player chooses one upgrade branch before continuing. If every branch is fully adapted, the level-complete button changes to **Continue** and moves straight into the next level.
+### Requirements
 
-## Adaptations
+- macOS with Xcode installed.
+- iOS Simulator runtime with iPhone 17 Pro available.
+- Git.
 
-| Branch | Theme | Gameplay Role |
-| --- | --- | --- |
-| Rapid Antibody Factory | IgG antibodies | Faster fire rate, paired shots, stronger hits, and triple spread |
-| Complement Pulse | Complement proteins | Expanding pulse sphere that damages pathogens and destroys platelet hazards |
-| Chemotaxis Dash | Chemotaxis | Quick repositioning burst with improved recovery and safety at higher ranks |
+### Xcode
 
-## Project Structure
+1. Open `native-ios/BloodstreamDefenderSpriteKit.xcodeproj`.
+2. Select the `BloodstreamDefenderSpriteKit` scheme.
+3. Select an iPhone simulator, preferably iPhone 17 Pro.
+4. Build and run.
+
+### Command Line
+
+Build for the iPhone 17 Pro simulator:
+
+```sh
+xcodebuild -project native-ios/BloodstreamDefenderSpriteKit.xcodeproj -scheme BloodstreamDefenderSpriteKit -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath /private/tmp/bds-spritekit-deriveddata build
+```
+
+Install and launch on the booted simulator:
+
+```sh
+xcrun simctl install booted /private/tmp/bds-spritekit-deriveddata/Build/Products/Debug-iphonesimulator/BloodstreamDefenderSpriteKit.app
+xcrun simctl terminate booted com.niko.bloodstreamdefender.spritekit
+xcrun simctl launch booted com.niko.bloodstreamdefender.spritekit
+```
+
+For a Simulator-only smoke build without signing:
+
+```sh
+xcodebuild -project native-ios/BloodstreamDefenderSpriteKit.xcodeproj -scheme BloodstreamDefenderSpriteKit -configuration Debug -sdk iphonesimulator -derivedDataPath /private/tmp/bds-spritekit-deriveddata CODE_SIGNING_ALLOWED=NO build
+```
+
+## Project Layout
 
 ```text
-.
-├── project.godot                 # Godot project configuration
-├── scenes/main.tscn              # Main Godot scene
-├── scripts/godot/main.gd         # Gameplay, UI, audio, spawning, and level flow
-├── assets/                       # Runtime sprites, UI art, audio, and parallax backgrounds
-├── docs/screenshots/             # README screenshots captured from the Godot build
-└── docs/                         # Godot port notes, art direction, and asset pipeline docs
+native-ios/
+├── BloodstreamDefenderSpriteKit.xcodeproj   # Xcode project
+├── BloodstreamDefenderSpriteKit/
+│   ├── AppDelegate.swift
+│   ├── SceneDelegate.swift
+│   ├── GameViewController.swift             # UIKit/SpriteKit host view
+│   ├── GameScene.swift                      # Gameplay, HUD, upgrades, audio, and level flow
+│   ├── Info.plist
+│   ├── Assets.xcassets/                     # Native app icon catalog
+│   └── Assets/
+│       ├── audio/                           # Runtime music and effects
+│       ├── backgrounds/parallax/            # Bloodstream background layers
+│       ├── sprites/                         # Player, enemies, bosses, and atlas sources
+│       └── ui/                              # HUD, menus, buttons, and upgrade art
+└── README.md                                # Extra native-port notes
 ```
+
+The root-level Godot files remain in the repo as reference material. They are not required to build or run the native iOS app.
 
 ## Development Notes
 
-The visual target is a readable, semi-cartoony bloodstream with strong arcade clarity: rich red plasma layers, expressive pathogens, bright platelet hazards, ornate immune-themed UI, and live Godot text for labels and numbers.
-
-When adding or revising UI art, keep generated assets modular and compose them in Godot. Avoid baked full-screen mockups when text needs to stay readable or adjustable in-engine.
+- Keep gameplay behavior intact when optimizing performance; prefer pooling and cosmetic budgets over reducing enemies, bullets, bosses, damage, or upgrades.
+- Generated UI assets should remain modular so labels and dynamic numbers stay live in SpriteKit.
+- Keep build products out of source control. Local folders such as `native-ios/DerivedData*/` and `native-ios/SwiftModuleCache/` are ignored.
+- The current visual target is a readable, semi-cartoony bloodstream with ornate immune-themed UI, bright arcade feedback, and stable 60 FPS on the iPhone 17 Pro simulator.
