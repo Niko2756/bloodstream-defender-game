@@ -133,7 +133,7 @@ private struct Constants {
     static let tiltSensitivitySliderLeftX: CGFloat = 465
     static let tiltSensitivitySliderY: CGFloat = 446
     static let tiltSensitivityMin: CGFloat = 1.35
-    static let tiltSensitivityDefault: CGFloat = 2.25
+    static let tiltSensitivityDefault: CGFloat = 1.8
     static let tiltSensitivityMax: CGFloat = 3.35
     static let scoreLeaderboardID = "com.niko.bloodstreamdefender.spritekit.best_score"
     static let levelLeaderboardID = "com.niko.bloodstreamdefender.spritekit.highest_level"
@@ -169,7 +169,7 @@ private struct Constants {
     static let dashDuration: TimeInterval = 0.18
     static let dashCooldown: TimeInterval = 2.1
     static let pulseCooldown: TimeInterval = 4.8
-    static let tiltDeadzone: CGFloat = 0.12
+    static let tiltDeadzone: CGFloat = 0.05
     static let tiltSmoothing: CGFloat = 9.0
     static let parallaxLayers = [
         ParallaxLayerDefinition(name: "layer-00-far-vessel-wash", subdirectory: "Assets/backgrounds/parallax/source", speed: 0.06, alpha: 1.0),
@@ -1270,13 +1270,13 @@ final class GameScene: SKScene {
                         playUITap()
                         startRun()
                     } else if restartCancelButton.contains(stagePoint) {
-                        audio.playSFX(.pauseResume)
+                        playPauseResumeSFX()
                         haptics.play(.selection)
                         restartConfirmVisible = false
                         restartConfirmOverlay.isHidden = true
                     }
                 } else if resumeButton.contains(stagePoint) {
-                    audio.playSFX(.pauseResume)
+                    playPauseResumeSFX()
                     haptics.play(.selection)
                     togglePause()
                 } else if restartButton.contains(stagePoint) {
@@ -1619,12 +1619,12 @@ final class GameScene: SKScene {
         if let pauseFrameTexture {
             let frame = SKSpriteNode(texture: pauseFrameTexture)
             frame.position = baseToStage(CGPoint(x: 1115, y: 43))
-            frame.size = CGSize(width: 106, height: 58)
+            frame.size = CGSize(width: 112, height: 66)
             frame.zPosition = ZLayer.hud + 1
             hudNode.addChild(frame)
         }
 
-        pauseButton = SKShapeNode(rectOf: CGSize(width: 106, height: 58), cornerRadius: 10)
+        pauseButton = SKShapeNode(rectOf: CGSize(width: 112, height: 66), cornerRadius: 12)
         pauseButton.fillColor = .clear
         pauseButton.strokeColor = .clear
         pauseButton.lineWidth = 0
@@ -1658,19 +1658,19 @@ final class GameScene: SKScene {
         controlsNode.addChild(joystickKnob)
         addJoystickKnobGlassDetails()
 
-        let abilityButtonSize = CGSize(width: 188, height: 72)
-        let abilityCornerRadius: CGFloat = 20
+        let abilityButtonSize = CGSize(width: 188, height: 86)
+        let abilityCornerRadius: CGFloat = 24
 
         dashButton = SKShapeNode(rectOf: abilityButtonSize, cornerRadius: abilityCornerRadius)
         dashButton.fillColor = UIColor(red: 0.70, green: 1.0, blue: 1.0, alpha: 0.14)
         dashButton.strokeColor = UIColor(red: 0.86, green: 1.0, blue: 1.0, alpha: 0.42)
         dashButton.lineWidth = 2.5
         dashButton.glowWidth = 3
-        dashButton.position = baseToStage(CGPoint(x: 1118, y: 544))
+        dashButton.position = baseToStage(CGPoint(x: 1118, y: 535))
         dashButton.zPosition = ZLayer.controls + 20
         controlsNode.addChild(dashButton)
 
-        let dashLabel = label("LOCKED", size: 17, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
+        let dashLabel = label("LOCKED", size: 18, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
         dashLabel.position = dashButton.position
         dashLabel.zPosition = ZLayer.controls + 21
         controlsNode.addChild(dashLabel)
@@ -1681,11 +1681,11 @@ final class GameScene: SKScene {
         pulseButton.strokeColor = UIColor(red: 0.86, green: 1.0, blue: 1.0, alpha: 0.42)
         pulseButton.lineWidth = 2.5
         pulseButton.glowWidth = 3
-        pulseButton.position = baseToStage(CGPoint(x: 1118, y: 628))
+        pulseButton.position = baseToStage(CGPoint(x: 1118, y: 633))
         pulseButton.zPosition = ZLayer.controls + 22
         controlsNode.addChild(pulseButton)
 
-        let pulseLabel = label("LOCKED", size: 17, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
+        let pulseLabel = label("LOCKED", size: 18, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
         pulseLabel.position = pulseButton.position
         pulseLabel.zPosition = ZLayer.controls + 23
         controlsNode.addChild(pulseLabel)
@@ -1777,8 +1777,8 @@ final class GameScene: SKScene {
         let titleY: CGFloat = 198
         let bestRunY: CGFloat = 404
         let startY: CGFloat = 548
-        let howToPlayY: CGFloat = 622
-        let gameCenterY: CGFloat = 674
+        let howToPlayY: CGFloat = 616
+        let gameCenterY: CGFloat = 680
 
         if let startSheetTexture {
             let plaque = SKSpriteNode(texture: regionTexture(from: startSheetTexture, frame: AtlasFrames.startTitlePlaque))
@@ -1837,18 +1837,18 @@ final class GameScene: SKScene {
         let howToPlay = addArtButton(
             to: titleGroup,
             center: CGPoint(x: centerX, y: howToPlayY),
-            size: CGSize(width: 248, height: 42),
+            size: CGSize(width: 248, height: 54),
             title: "HOW TO PLAY",
-            fontSize: 15
+            fontSize: 17
         )
         titleHowToPlayButton = howToPlay.shape
 
         let leaderboards = addArtButton(
             to: titleGroup,
             center: CGPoint(x: centerX, y: gameCenterY),
-            size: CGSize(width: 248, height: 42),
+            size: CGSize(width: 248, height: 54),
             title: "LEADERBOARDS",
-            fontSize: 15
+            fontSize: 17
         )
         leaderboardsButton = leaderboards.shape
         leaderboardsLabel = leaderboards.label
@@ -1864,11 +1864,11 @@ final class GameScene: SKScene {
         if let pauseCompleteTexture {
             let panel = SKSpriteNode(texture: regionTexture(from: pauseCompleteTexture, frame: AtlasFrames.pausePanel))
             panel.position = baseToStage(CGPoint(x: 640, y: 354))
-            panel.size = CGSize(width: 356, height: 514)
+            panel.size = CGSize(width: 418, height: 584)
             panel.zPosition = ZLayer.overlay + 1
             pauseOverlay.addChild(panel)
         } else {
-            let panel = SKShapeNode(rectOf: CGSize(width: 356, height: 500), cornerRadius: 22)
+            let panel = SKShapeNode(rectOf: CGSize(width: 418, height: 568), cornerRadius: 26)
             panel.fillColor = UIColor(red: 0.04, green: 0.01, blue: 0.04, alpha: 0.86)
             panel.strokeColor = UIColor(red: 0.38, green: 1.0, blue: 1.0, alpha: 0.72)
             panel.lineWidth = 2
@@ -1876,26 +1876,26 @@ final class GameScene: SKScene {
             pauseOverlay.addChild(panel)
         }
 
-        let text = label("Paused", size: 42, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
-        text.position = baseToStage(CGPoint(x: pauseContentX, y: 192))
+        let text = label("Paused", size: 46, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
+        text.position = baseToStage(CGPoint(x: pauseContentX, y: 178))
         pauseOverlay.addChild(text)
 
-        let resume = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 252), size: CGSize(width: 192, height: 42), title: "Resume", fontSize: 17)
+        let resume = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 244), size: CGSize(width: 212, height: 54), title: "Resume", fontSize: 19)
         resumeButton = resume.shape
 
-        let audio = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 318), size: CGSize(width: 210, height: 42), title: "Audio & Feedback", fontSize: 14)
+        let audio = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 314), size: CGSize(width: 234, height: 54), title: "Audio & Feedback", fontSize: 15)
         audioSettingsButton = audio.shape
         audioSettingsLabel = audio.label
 
-        let input = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 376), size: CGSize(width: 210, height: 42), title: "Input Settings", fontSize: 15)
+        let input = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 380), size: CGSize(width: 234, height: 54), title: "Input Settings", fontSize: 16)
         inputSettingsButton = input.shape
         inputSettingsLabel = input.label
 
-        let howToPlay = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 434), size: CGSize(width: 210, height: 42), title: "How to Play", fontSize: 15)
+        let howToPlay = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 446), size: CGSize(width: 234, height: 54), title: "How to Play", fontSize: 16)
         howToPlayButton = howToPlay.shape
         howToPlayLabel = howToPlay.label
 
-        let restart = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 500), size: CGSize(width: 210, height: 42), title: "Restart Run", fontSize: 15)
+        let restart = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 516), size: CGSize(width: 234, height: 54), title: "Restart Run", fontSize: 16)
         restartButton = restart.shape
 
         setupAudioSettingsOverlay()
@@ -1918,7 +1918,7 @@ final class GameScene: SKScene {
         shade.zPosition = ZLayer.overlay
         audioSettingsOverlay.addChild(shade)
 
-        let panel = SKShapeNode(rectOf: CGSize(width: 560, height: 318), cornerRadius: 24)
+        let panel = SKShapeNode(rectOf: CGSize(width: 600, height: 350), cornerRadius: 26)
         panel.fillColor = UIColor(red: 0.025, green: 0.0, blue: 0.025, alpha: 0.98)
         panel.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.86)
         panel.lineWidth = 3
@@ -1927,23 +1927,23 @@ final class GameScene: SKScene {
         panel.zPosition = ZLayer.overlay + 1
         audioSettingsOverlay.addChild(panel)
 
-        let title = label("Audio & Feedback", size: 27, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        let title = label("Audio & Feedback", size: 29, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
         title.position = baseToStage(CGPoint(x: 640, y: 266))
         title.zPosition = ZLayer.overlay + 61
         audioSettingsOverlay.addChild(title)
 
-        let back = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 470, y: 318), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+        let back = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 470, y: 318), size: CGSize(width: 142, height: 50), title: "Back", fontSize: 15)
         audioSettingsBackButton = back.shape
 
-        let music = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 364), size: CGSize(width: 204, height: 42), title: "Music: On", fontSize: 15)
+        let music = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 364), size: CGSize(width: 220, height: 52), title: "Music: On", fontSize: 16)
         musicToggleButton = music.shape
         musicToggleLabel = music.label
 
-        let sfx = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 424), size: CGSize(width: 204, height: 42), title: "Effects: On", fontSize: 15)
+        let sfx = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 424), size: CGSize(width: 220, height: 52), title: "Effects: On", fontSize: 16)
         sfxToggleButton = sfx.shape
         sfxToggleLabel = sfx.label
 
-        let haptics = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 484), size: CGSize(width: 204, height: 42), title: "Haptics: On", fontSize: 15)
+        let haptics = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 484), size: CGSize(width: 220, height: 52), title: "Haptics: On", fontSize: 16)
         hapticsToggleButton = haptics.shape
         hapticsToggleLabel = haptics.label
 
@@ -1959,7 +1959,7 @@ final class GameScene: SKScene {
         shade.zPosition = ZLayer.overlay
         inputSettingsOverlay.addChild(shade)
 
-        let panel = SKShapeNode(rectOf: CGSize(width: 590, height: 330), cornerRadius: 24)
+        let panel = SKShapeNode(rectOf: CGSize(width: 620, height: 366), cornerRadius: 26)
         panel.fillColor = UIColor(red: 0.025, green: 0.0, blue: 0.025, alpha: 0.98)
         panel.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.86)
         panel.lineWidth = 3
@@ -1968,19 +1968,19 @@ final class GameScene: SKScene {
         panel.zPosition = ZLayer.overlay + 1
         inputSettingsOverlay.addChild(panel)
 
-        let title = label("Input Settings", size: 27, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        let title = label("Input Settings", size: 29, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
         title.position = baseToStage(CGPoint(x: 640, y: 266))
         title.zPosition = ZLayer.overlay + 61
         inputSettingsOverlay.addChild(title)
 
-        let back = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 458, y: 314), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+        let back = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 458, y: 314), size: CGSize(width: 142, height: 50), title: "Back", fontSize: 15)
         inputSettingsBackButton = back.shape
 
-        let tilt = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 574, y: 370), size: CGSize(width: 154, height: 40), title: "Tilt: Off", fontSize: 14)
+        let tilt = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 574, y: 370), size: CGSize(width: 166, height: 50), title: "Tilt: Off", fontSize: 15)
         tiltToggleButton = tilt.shape
         tiltToggleLabel = tilt.label
 
-        let calibrate = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 738, y: 370), size: CGSize(width: 154, height: 40), title: "Calibrate", fontSize: 14)
+        let calibrate = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 738, y: 370), size: CGSize(width: 166, height: 50), title: "Calibrate", fontSize: 15)
         tiltCalibrateButton = calibrate.shape
         tiltCalibrateLabel = calibrate.label
 
@@ -2015,14 +2015,14 @@ final class GameScene: SKScene {
         tiltSensitivityKnob.zPosition = ZLayer.overlay + 64
         inputSettingsOverlay.addChild(tiltSensitivityKnob)
 
-        tiltSensitivityHitArea = SKShapeNode(rectOf: CGSize(width: Constants.tiltSensitivitySliderWidth + 64, height: 58), cornerRadius: 14)
+        tiltSensitivityHitArea = SKShapeNode(rectOf: CGSize(width: Constants.tiltSensitivitySliderWidth + 64, height: 62), cornerRadius: 15)
         tiltSensitivityHitArea.fillColor = UIColor(red: 0, green: 0, blue: 0, alpha: 0.001)
         tiltSensitivityHitArea.strokeColor = .clear
         tiltSensitivityHitArea.position = baseToStage(sliderCenter)
         tiltSensitivityHitArea.zPosition = ZLayer.overlay + 65
         inputSettingsOverlay.addChild(tiltSensitivityHitArea)
 
-        let valueLabel = label("", size: 15, color: UIColor(red: 1.0, green: 0.92, blue: 0.64, alpha: 1.0))
+        let valueLabel = label("", size: 16, color: UIColor(red: 1.0, green: 0.92, blue: 0.64, alpha: 1.0))
         valueLabel.position = baseToStage(CGPoint(x: 640, y: 486))
         valueLabel.zPosition = ZLayer.overlay + 61
         inputSettingsOverlay.addChild(valueLabel)
@@ -2051,7 +2051,7 @@ final class GameScene: SKScene {
             page.zPosition = ZLayer.overlay + 1
             howToPlayOverlay.addChild(page)
 
-            let back = addArtButton(to: howToPlayOverlay, center: CGPoint(x: 132, y: 66), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+            let back = addArtButton(to: howToPlayOverlay, center: CGPoint(x: 132, y: 66), size: CGSize(width: 146, height: 52), title: "Back", fontSize: 16)
             howToPlayBackButton = back.shape
 
             howToPlayOverlay.isHidden = true
@@ -2073,7 +2073,7 @@ final class GameScene: SKScene {
         title.zPosition = ZLayer.overlay + 61
         howToPlayOverlay.addChild(title)
 
-        let back = addArtButton(to: howToPlayOverlay, center: CGPoint(x: 330, y: 258), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+        let back = addArtButton(to: howToPlayOverlay, center: CGPoint(x: 330, y: 258), size: CGSize(width: 146, height: 52), title: "Back", fontSize: 16)
         howToPlayBackButton = back.shape
 
         addHowToPlaySection(
@@ -2156,9 +2156,9 @@ final class GameScene: SKScene {
         body.zPosition = ZLayer.overlay + 21
         restartConfirmOverlay.addChild(body)
 
-        let cancel = addArtButton(to: restartConfirmOverlay, center: CGPoint(x: 550, y: 432), size: CGSize(width: 148, height: 42), title: "Cancel", fontSize: 14)
+        let cancel = addArtButton(to: restartConfirmOverlay, center: CGPoint(x: 550, y: 432), size: CGSize(width: 158, height: 54), title: "Cancel", fontSize: 16)
         restartCancelButton = cancel.shape
-        let confirm = addArtButton(to: restartConfirmOverlay, center: CGPoint(x: 730, y: 432), size: CGSize(width: 148, height: 42), title: "Restart", fontSize: 14)
+        let confirm = addArtButton(to: restartConfirmOverlay, center: CGPoint(x: 730, y: 432), size: CGSize(width: 158, height: 54), title: "Restart", fontSize: 16)
         restartConfirmButton = confirm.shape
         restartConfirmOverlay.isHidden = true
     }
@@ -2170,11 +2170,11 @@ final class GameScene: SKScene {
         if let pauseCompleteTexture {
             let panel = SKSpriteNode(texture: regionTexture(from: pauseCompleteTexture, frame: AtlasFrames.completePanel))
             panel.position = baseToStage(CGPoint(x: 640, y: 344))
-            panel.size = CGSize(width: 780, height: 420)
+            panel.size = CGSize(width: 860, height: 470)
             panel.zPosition = ZLayer.overlay + 1
             levelCompleteOverlay.addChild(panel)
         } else {
-            let panel = SKShapeNode(rectOf: CGSize(width: 780, height: 420), cornerRadius: 24)
+            let panel = SKShapeNode(rectOf: CGSize(width: 860, height: 470), cornerRadius: 28)
             panel.fillColor = UIColor(red: 0.04, green: 0.01, blue: 0.04, alpha: 0.86)
             panel.strokeColor = UIColor(red: 0.38, green: 1.0, blue: 1.0, alpha: 0.72)
             panel.lineWidth = 2
@@ -2182,20 +2182,20 @@ final class GameScene: SKScene {
             levelCompleteOverlay.addChild(panel)
         }
 
-        let title = label("Level Complete", size: 44, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
-        title.position = baseToStage(CGPoint(x: 640, y: 278))
+        let title = label("Level Complete", size: 50, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
+        title.position = baseToStage(CGPoint(x: 640, y: 264))
         levelCompleteOverlay.addChild(title)
         levelCompleteTitleLabel = title
 
-        let body = multilineLabel("", size: 18, color: UIColor(red: 0.88, green: 1.0, blue: 0.9, alpha: 1.0), width: 520, lines: 5)
+        let body = multilineLabel("", size: 20, color: UIColor(red: 0.88, green: 1.0, blue: 0.9, alpha: 1.0), width: 610, lines: 5)
         body.position = baseToStage(CGPoint(x: 640, y: 374))
         levelCompleteOverlay.addChild(body)
         levelCompleteBodyLabel = body
 
-        let action = addArtButton(to: levelCompleteOverlay, center: CGPoint(x: 640, y: 490), size: CGSize(width: 248, height: 48), title: "Choose Adaptation", fontSize: 18)
+        let action = addArtButton(to: levelCompleteOverlay, center: CGPoint(x: 640, y: 500), size: CGSize(width: 292, height: 58), title: "Choose Adaptation", fontSize: 20)
         levelCompleteActionButton = action.shape
         levelCompleteActionLabel = action.label
-        action.label.position = baseToStage(CGPoint(x: 648, y: 492))
+        action.label.position = baseToStage(CGPoint(x: 648, y: 502))
 
         levelCompleteOverlay.isHidden = true
         overlayNode.addChild(levelCompleteOverlay)
@@ -2467,6 +2467,7 @@ final class GameScene: SKScene {
         controlsNode.isHidden = true
         playerNode?.isHidden = true
         fireTouchIds.removeAll()
+        stopBossEncounterSFX()
         audio.playMusic(.menu)
         audio.stopAmbience()
     }
@@ -2515,6 +2516,7 @@ final class GameScene: SKScene {
         updateHUD()
         updateAbilityControls()
         mode = .running
+        stopBossEncounterSFX()
         audio.playMusic(.combat)
         audio.playAmbience()
     }
@@ -2551,6 +2553,7 @@ final class GameScene: SKScene {
         updateHUD()
         updateAbilityControls()
         mode = .running
+        stopBossEncounterSFX()
         playDesiredMusic()
         audio.playAmbience()
     }
@@ -2982,6 +2985,7 @@ final class GameScene: SKScene {
             updateJoystickVisual()
             resetTiltCalibrationFeedback()
             updatePauseToggleLabels()
+            pauseBossWarningSFX()
             audio.playSFX(.pauseOpen)
             audio.pauseMusic()
             audio.stopAmbience()
@@ -2996,6 +3000,7 @@ final class GameScene: SKScene {
             if shouldPlayVeinAmbience() {
                 audio.playAmbience()
             }
+            resumeBossWarningSFXIfNeeded()
         }
     }
 
@@ -3072,6 +3077,7 @@ final class GameScene: SKScene {
         updateGameOverOverlay()
         pendingMusicCue = .menu
         pendingMusicTimer = 0.65
+        stopBossEncounterSFX()
         audio.stopMusic()
         audio.stopAmbience()
         audio.playSFX(.playerDeath)
@@ -3285,6 +3291,7 @@ final class GameScene: SKScene {
         nextEnemyId += 1
         enemies.append(boss)
         showBanner(profile.title)
+        stopBossEncounterSFX()
         audio.playMusic(.boss)
         audio.playAmbience()
     }
@@ -4655,6 +4662,7 @@ final class GameScene: SKScene {
         player.invulnerable = max(player.invulnerable, 3.0)
         pendingMusicCue = .upgrade
         pendingMusicTimer = 0.55
+        stopBossEncounterSFX()
         audio.stopMusic()
         audio.stopAmbience()
         audio.playSFX(.levelComplete)
@@ -4925,6 +4933,10 @@ final class GameScene: SKScene {
         haptics.play(.selection)
     }
 
+    private func playPauseResumeSFX() {
+        audio.playSFX(.pauseResume, fadeOutAfter: 0.34, fadeDuration: 0.22)
+    }
+
     private func openInputSettings() {
         closeAudioSettings()
         closeHowToPlay()
@@ -5034,16 +5046,14 @@ final class GameScene: SKScene {
             tiltHasCalibration = true
         }
 
-        var move = CGVector(
-            dx: (sensor.dx - tiltNeutral.dx) * tiltSensitivity,
-            dy: (sensor.dy - tiltNeutral.dy) * tiltSensitivity
+        let rawMove = CGVector(
+            dx: sensor.dx - tiltNeutral.dx,
+            dy: -(sensor.dy - tiltNeutral.dy)
         )
-        if abs(move.dx) < Constants.tiltDeadzone {
-            move.dx = 0
-        }
-        if abs(move.dy) < Constants.tiltDeadzone {
-            move.dy = 0
-        }
+        var move = CGVector(
+            dx: tiltAxisValue(from: rawMove.dx),
+            dy: tiltAxisValue(from: rawMove.dy)
+        )
         move = limit(move, maxLength: 1)
         tiltVector = lerp(tiltVector, move, min(Constants.tiltSmoothing * CGFloat(delta), 1))
         if vectorLength(tiltVector) < 0.015 {
@@ -5052,6 +5062,15 @@ final class GameScene: SKScene {
         if joystickTouchId == nil {
             updateJoystickVisual()
         }
+    }
+
+    private func tiltAxisValue(from rawValue: CGFloat) -> CGFloat {
+        let magnitude = abs(rawValue)
+        guard magnitude > Constants.tiltDeadzone else {
+            return 0
+        }
+        let adjusted = (magnitude - Constants.tiltDeadzone) * tiltSensitivity
+        return rawValue < 0 ? -adjusted : adjusted
     }
 
     private func rawTiltSensor() -> CGVector? {
@@ -5134,18 +5153,39 @@ final class GameScene: SKScene {
         case .levelComplete, .upgrade:
             audio.playMusic(.upgrade)
         case .running:
+            if levelClearTimer > 0 {
+                audio.playMusic(.upgrade)
+                return
+            }
             if bossWarningStarted && !bossSpawned && bossWarningTimer > 0 {
                 return
             }
             if dangerMusicShouldPlay() {
                 audio.playMusic(.danger)
-            } else if activeMission.isEncounter && (bossSpawned || activeBoss() != nil) {
+            } else if activeMission.isEncounter && !bossDefeated && activeBoss() != nil {
                 audio.playMusic(.boss)
             } else {
                 audio.playMusic(.combat)
             }
         case .paused:
             break
+        }
+    }
+
+    private func stopBossEncounterSFX() {
+        audio.stopSFX(.bossWarning)
+        audio.stopSFX(.bossPhase)
+    }
+
+    private func pauseBossWarningSFX() {
+        audio.pauseSFX(.bossWarning)
+    }
+
+    private func resumeBossWarningSFXIfNeeded() {
+        if bossWarningStarted && !bossSpawned && bossWarningTimer > 0 {
+            audio.resumeSFX(.bossWarning)
+        } else {
+            audio.stopSFX(.bossWarning)
         }
     }
 
@@ -5220,7 +5260,7 @@ final class GameScene: SKScene {
     }
 
     private func tiltSensitivityDescription(for value: CGFloat) -> String {
-        if value < 1.85 {
+        if value < 1.65 {
             return "Low"
         }
         if value > 2.75 {
@@ -6342,6 +6382,8 @@ private final class AudioSystem {
     private var currentMusicCue: AudioCue?
     private var ambiencePlayer: AVAudioPlayer?
     private var sfxPlayers: [AudioCue: AVAudioPlayer] = [:]
+    private var sfxPlaybackTokens: [AudioCue: Int] = [:]
+    private var pausedSFX = Set<AudioCue>()
     private var musicMuted = false
     private var sfxMuted = false
 
@@ -6411,7 +6453,13 @@ private final class AudioSystem {
     func setSFXMuted(_ muted: Bool) {
         sfxMuted = muted
         if muted {
-            sfxPlayers.values.forEach { $0.stop() }
+            pausedSFX.removeAll()
+            sfxPlayers.forEach { cue, player in
+                _ = nextSFXPlaybackToken(for: cue)
+                player.stop()
+                player.currentTime = 0
+                player.volume = cue.volume
+            }
         }
     }
 
@@ -6419,10 +6467,80 @@ private final class AudioSystem {
         guard !sfxMuted, let player = sfxPlayers[cue] else {
             return
         }
-        if player.isPlaying {
-            player.currentTime = 0
-        }
+        _ = nextSFXPlaybackToken(for: cue)
+        pausedSFX.remove(cue)
+        player.stop()
+        player.currentTime = 0
+        player.volume = cue.volume
         player.play()
+    }
+
+    func playSFX(_ cue: AudioCue, fadeOutAfter delay: TimeInterval, fadeDuration: TimeInterval) {
+        guard !sfxMuted, let player = sfxPlayers[cue] else {
+            return
+        }
+        let token = nextSFXPlaybackToken(for: cue)
+        pausedSFX.remove(cue)
+        player.stop()
+        player.currentTime = 0
+        player.volume = cue.volume
+        player.play()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay)) { [weak self, weak player] in
+            guard let self,
+                  let player,
+                  self.sfxPlaybackTokens[cue] == token,
+                  player.isPlaying else {
+                return
+            }
+            player.setVolume(0, fadeDuration: fadeDuration)
+            DispatchQueue.main.asyncAfter(deadline: .now() + max(0, fadeDuration)) { [weak self, weak player] in
+                guard let self,
+                      let player,
+                      self.sfxPlaybackTokens[cue] == token else {
+                    return
+                }
+                player.stop()
+                player.currentTime = 0
+                player.volume = cue.volume
+            }
+        }
+    }
+
+    func pauseSFX(_ cue: AudioCue) {
+        guard let player = sfxPlayers[cue], player.isPlaying else {
+            pausedSFX.remove(cue)
+            return
+        }
+        player.pause()
+        pausedSFX.insert(cue)
+    }
+
+    func resumeSFX(_ cue: AudioCue) {
+        guard !sfxMuted,
+              pausedSFX.remove(cue) != nil,
+              let player = sfxPlayers[cue] else {
+            return
+        }
+        player.volume = cue.volume
+        player.play()
+    }
+
+    func stopSFX(_ cue: AudioCue) {
+        guard let player = sfxPlayers[cue] else {
+            return
+        }
+        _ = nextSFXPlaybackToken(for: cue)
+        pausedSFX.remove(cue)
+        player.stop()
+        player.currentTime = 0
+        player.volume = cue.volume
+    }
+
+    private func nextSFXPlaybackToken(for cue: AudioCue) -> Int {
+        let token = (sfxPlaybackTokens[cue] ?? 0) + 1
+        sfxPlaybackTokens[cue] = token
+        return token
     }
 
     private func makePlayer(for cue: AudioCue, loops: Bool) -> AVAudioPlayer? {

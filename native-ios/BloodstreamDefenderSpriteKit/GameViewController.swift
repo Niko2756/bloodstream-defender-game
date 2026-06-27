@@ -9,6 +9,7 @@ final class GameViewController: UIViewController {
         let skView = SKView(frame: .zero)
         skView.backgroundColor = .black
         skView.ignoresSiblingOrder = true
+        skView.isMultipleTouchEnabled = true
         skView.preferredFramesPerSecond = 60
         view = skView
     }

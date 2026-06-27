@@ -9,6 +9,10 @@ build/*
 native-ios/DerivedData*/
 native-ios/SwiftModuleCache/
 
+# Xcode local user state
+xcuserdata/
+*.xcuserstate
+
 # Local high-size music backups. The game uses the matching MP3 files instead.
 assets/audio/Boss loop.wav
 assets/audio/Boss warning rumble.wav
