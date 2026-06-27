@@ -24,6 +24,7 @@
 		A20000000000000000000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000007 /* BloodstreamDefenderSpriteKit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BloodstreamDefenderSpriteKit.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000008 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000009 /* BloodstreamDefenderSpriteKit.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BloodstreamDefenderSpriteKit.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +54,7 @@
 				A20000000000000000000003 /* GameViewController.swift */,
 				A20000000000000000000004 /* GameScene.swift */,
 				A20000000000000000000006 /* Info.plist */,
+				A20000000000000000000009 /* BloodstreamDefenderSpriteKit.entitlements */,
 				A20000000000000000000008 /* Assets.xcassets */,
 				A20000000000000000000005 /* Assets */,
 			);
@@ -99,6 +101,11 @@
 				TargetAttributes = {
 					A50000000000000000000001 = {
 						CreatedOnToolsVersion = 26.5;
+						SystemCapabilities = {
+							com.apple.GameCenter = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -269,6 +276,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = BloodstreamDefenderSpriteKit/BloodstreamDefenderSpriteKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -296,6 +304,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = BloodstreamDefenderSpriteKit/BloodstreamDefenderSpriteKit.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";

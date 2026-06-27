@@ -1,6 +1,7 @@
 import AVFoundation
 import CoreMotion
 import Foundation
+import GameKit
 import SpriteKit
 import UIKit
 
@@ -29,13 +30,18 @@ private enum UpgradeChoice {
     case dash
 }
 
+private struct UpgradeRankInfo {
+    let current: String
+    let next: String
+}
+
 private struct UpgradeDefinition {
     let choice: UpgradeChoice
     let term: String
     let title: String
     let controls: String
     let body: String
-    let ranks: [String]
+    let ranks: [UpgradeRankInfo]
     let medallionName: String
     let accent: UIColor
 }
@@ -47,6 +53,7 @@ private enum EnemyKind {
     case budding
     case influenza
     case fragment
+    case bossDecoy
     case boss
 }
 
@@ -54,6 +61,9 @@ private enum BossKind {
     case pox
     case adenovirus
     case filovirus
+    case rotavirus
+    case lyssavirus
+    case norovirus
 }
 
 private struct ParallaxLayerDefinition {
@@ -119,6 +129,14 @@ private struct Constants {
     static let sparkNodeName = "pooledSpark"
     static let tiltCalibrationToastActionKey = "tiltCalibrationToast"
     static let tiltCalibrateButtonResetActionKey = "tiltCalibrateButtonReset"
+    static let tiltSensitivitySliderWidth: CGFloat = 350
+    static let tiltSensitivitySliderLeftX: CGFloat = 465
+    static let tiltSensitivitySliderY: CGFloat = 446
+    static let tiltSensitivityMin: CGFloat = 1.35
+    static let tiltSensitivityDefault: CGFloat = 2.25
+    static let tiltSensitivityMax: CGFloat = 3.35
+    static let scoreLeaderboardID = "com.niko.bloodstreamdefender.spritekit.best_score"
+    static let levelLeaderboardID = "com.niko.bloodstreamdefender.spritekit.highest_level"
     static let maxUpgradeRank = 4
     static let dangerMusicThreshold: CGFloat = 0.42
     static let dangerMusicResetRatio: CGFloat = 0.72
@@ -139,6 +157,7 @@ private struct Constants {
     static let progressBarCenter = CGPoint(x: 640, y: 684)
     static let progressFrameSize = CGSize(width: 780, height: 48)
     static let maxActiveEnemies = 14
+    static let maxNorovirusDecoys = 6
     static let levelClearDelay: TimeInterval = 0.7
     static let pulseBaseRadius: CGFloat = 180
     static let pulseRadiusPerRank: CGFloat = 42
@@ -150,7 +169,6 @@ private struct Constants {
     static let dashDuration: TimeInterval = 0.18
     static let dashCooldown: TimeInterval = 2.1
     static let pulseCooldown: TimeInterval = 4.8
-    static let tiltSensitivity: CGFloat = 2.25
     static let tiltDeadzone: CGFloat = 0.12
     static let tiltSmoothing: CGFloat = 9.0
     static let parallaxLayers = [
@@ -171,6 +189,9 @@ private struct Constants {
         MissionDefinition(name: "Pox-Brick Breach", term: "Poxvirus", target: "virions", isEncounter: true, bossKind: .pox, bossTarget: "pox boss"),
         MissionDefinition(name: "Adenovirus Prism", term: "Adenovirus", target: "virions", isEncounter: true, bossKind: .adenovirus, bossTarget: "adenovirus mini-boss"),
         MissionDefinition(name: "Filovirus Ribbon", term: "Filovirus", target: "virions", isEncounter: true, bossKind: .filovirus, bossTarget: "filovirus boss"),
+        MissionDefinition(name: "Rotavirus Gyre", term: "Rotavirus", target: "virions", isEncounter: true, bossKind: .rotavirus, bossTarget: "rotavirus gyre"),
+        MissionDefinition(name: "Lyssavirus Lance", term: "Rabies lyssavirus", target: "virions", isEncounter: true, bossKind: .lyssavirus, bossTarget: "lyssavirus lance"),
+        MissionDefinition(name: "Norovirus Swarm-Core", term: "Norovirus", target: "virions", isEncounter: true, bossKind: .norovirus, bossTarget: "norovirus swarm-core"),
         MissionDefinition(name: "Adenovirus Prism", term: "Adenovirus", target: "virions", isEncounter: true, bossKind: .adenovirus, bossTarget: "adenovirus mini-boss")
     ]
     static let upgrades = [
@@ -179,12 +200,12 @@ private struct Constants {
             term: "IgG antibodies",
             title: "Rapid Antibody Factory",
             controls: "Use: Space, click, or tap.",
-            body: "Shortens antibody cooldown. Later ranks release paired and triple Y-shaped antibodies.",
+            body: "Improves antibody output with faster cooldowns, stronger hits, and extra projectiles.",
             ranks: [
-                "Rank 1: faster antibody firing",
-                "Rank 2: paired antibodies",
-                "Rank 3: stronger antibody hits",
-                "Rank 4: triple antibody spread"
+                UpgradeRankInfo(current: "Faster cooldown", next: "Faster antibody cooldown"),
+                UpgradeRankInfo(current: "Paired antibodies", next: "Fire paired antibodies"),
+                UpgradeRankInfo(current: "Stronger paired hits", next: "Stronger hits, faster cooldown"),
+                UpgradeRankInfo(current: "Triple spread, max output", next: "Triple antibody spread")
             ],
             medallionName: "upgrade-medallion-antibody",
             accent: UIColor(red: 0.45, green: 1.0, blue: 1.0, alpha: 1.0)
@@ -193,13 +214,13 @@ private struct Constants {
             choice: .pulse,
             term: "Complement proteins",
             title: "Complement Pulse",
-            controls: "Use: E, Q, or Enter.",
-            body: "Creates a radial complement burst that damages nearby pathogens and breaks platelets.",
+            controls: "Use: E, Enter, or PULSE button.",
+            body: "Emergency radial burst that clears nearby pathogens, breaks platelets, and scales against bosses.",
             ranks: [
-                "Rank 1: unlock pulse",
-                "Rank 2: larger damage ring",
-                "Rank 3: shorter cooldown",
-                "Rank 4: heavy nearby clear"
+                UpgradeRankInfo(current: "Pulse unlocked", next: "Unlock complement pulse"),
+                UpgradeRankInfo(current: "Wider burst, stronger bosses", next: "Wider burst, stronger boss hit"),
+                UpgradeRankInfo(current: "Faster recharge, longer wave", next: "Faster recharge, longer wave"),
+                UpgradeRankInfo(current: "Max radius and impact", next: "Maximum radius and impact")
             ],
             medallionName: "upgrade-medallion-complement",
             accent: UIColor(red: 0.88, green: 0.43, blue: 1.0, alpha: 1.0)
@@ -208,13 +229,13 @@ private struct Constants {
             choice: .dash,
             term: "Chemotaxis",
             title: "Chemotaxis Dash",
-            controls: "Use: Shift + movement.",
-            body: "Surges through crowded vessel sections and briefly slips past contact damage.",
+            controls: "Use: Q, Shift + movement, or DASH button.",
+            body: "Directional escape surge with brief contact protection, stronger movement, and faster recovery.",
             ranks: [
-                "Rank 1: unlock dash",
-                "Rank 2: stronger surge",
-                "Rank 3: faster recovery",
-                "Rank 4: longer invulnerable slip"
+                UpgradeRankInfo(current: "Dash unlocked", next: "Unlock chemotaxis dash"),
+                UpgradeRankInfo(current: "Faster surge, shorter recovery", next: "Faster surge, shorter recovery"),
+                UpgradeRankInfo(current: "Longer slip protection", next: "Longer slip protection"),
+                UpgradeRankInfo(current: "Max dash and invulnerable slip", next: "Maximum dash and invulnerable slip")
             ],
             medallionName: "upgrade-medallion-chemotaxis",
             accent: UIColor(red: 0.42, green: 1.0, blue: 0.66, alpha: 1.0)
@@ -227,6 +248,21 @@ private struct SpriteFrame {
 }
 
 private struct AtlasFrames {
+    private static let bossCandidateCell: CGFloat = 444
+
+    private static func bossCandidateSheetFrames() -> [SpriteFrame] {
+        (0..<8).map { index in
+            let column = index % 4
+            let row = index / 4
+            return SpriteFrame(rect: CGRect(
+                x: CGFloat(column) * bossCandidateCell,
+                y: CGFloat(row) * bossCandidateCell,
+                width: bossCandidateCell,
+                height: bossCandidateCell
+            ))
+        }
+    }
+
     static let whiteCell = [
         SpriteFrame(rect: CGRect(x: 45, y: 41, width: 184, height: 178)),
         SpriteFrame(rect: CGRect(x: 284, y: 58, width: 221, height: 158)),
@@ -297,6 +333,11 @@ private struct AtlasFrames {
         SpriteFrame(rect: CGRect(x: 1086, y: 91, width: 543, height: 543)),
         SpriteFrame(rect: CGRect(x: 1629, y: 91, width: 543, height: 543))
     ]
+
+    static let rotavirus = bossCandidateSheetFrames()
+    static let lyssavirus = bossCandidateSheetFrames()
+    static let norovirus = bossCandidateSheetFrames()
+    static let norovirusDecoyOrb = SpriteFrame(rect: CGRect(x: 82, y: 74, width: 88, height: 88))
 
     static let startTitlePlaque = SpriteFrame(rect: CGRect(x: 132, y: 16, width: 1268, height: 372))
     static let startRunButton = SpriteFrame(rect: CGRect(x: 292, y: 414, width: 920, height: 190))
@@ -384,6 +425,146 @@ private struct RunRecord {
     }
 }
 
+private enum HapticCue {
+    case selection
+    case lightImpact
+    case mediumImpact
+    case heavyImpact
+    case success
+    case warning
+}
+
+private final class HapticEngine {
+    private let selection = UISelectionFeedbackGenerator()
+    private let lightImpact = UIImpactFeedbackGenerator(style: .light)
+    private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
+    private let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
+    private let notification = UINotificationFeedbackGenerator()
+    private var muted = false
+
+    func setMuted(_ value: Bool) {
+        muted = value
+        if !value {
+            prepare()
+        }
+    }
+
+    func prepare() {
+        guard !muted else {
+            return
+        }
+        selection.prepare()
+        lightImpact.prepare()
+        mediumImpact.prepare()
+        heavyImpact.prepare()
+        notification.prepare()
+    }
+
+    func play(_ cue: HapticCue) {
+        guard !muted else {
+            return
+        }
+        switch cue {
+        case .selection:
+            selection.selectionChanged()
+            selection.prepare()
+        case .lightImpact:
+            lightImpact.impactOccurred()
+            lightImpact.prepare()
+        case .mediumImpact:
+            mediumImpact.impactOccurred()
+            mediumImpact.prepare()
+        case .heavyImpact:
+            heavyImpact.impactOccurred()
+            heavyImpact.prepare()
+        case .success:
+            notification.notificationOccurred(.success)
+            notification.prepare()
+        case .warning:
+            notification.notificationOccurred(.warning)
+            notification.prepare()
+        }
+    }
+}
+
+private final class GameCenterService {
+    private(set) var isAuthenticated = false
+    private var pendingRecord: RunRecord?
+    var onAuthenticationChanged: ((Bool) -> Void)?
+
+    func authenticate(presentingViewController: UIViewController?, bestRunProvider: @escaping () -> RunRecord?) {
+        GKLocalPlayer.local.authenticateHandler = { [weak self, weak presentingViewController] viewController, error in
+            guard let self else {
+                return
+            }
+
+            if let viewController {
+                presentingViewController?.present(viewController, animated: true)
+                return
+            }
+
+            self.isAuthenticated = GKLocalPlayer.local.isAuthenticated
+            self.onAuthenticationChanged?(self.isAuthenticated)
+            if self.isAuthenticated {
+                if let bestRun = bestRunProvider() {
+                    self.submit(record: bestRun)
+                } else if let pendingRecord = self.pendingRecord {
+                    self.submit(record: pendingRecord)
+                }
+            } else if error != nil {
+                self.pendingRecord = bestRunProvider()
+            }
+        }
+    }
+
+    func submit(record: RunRecord) {
+        guard record.score > 0 || record.level > 1 else {
+            return
+        }
+
+        guard GKLocalPlayer.local.isAuthenticated else {
+            pendingRecord = record
+            return
+        }
+
+        let player = GKLocalPlayer.local
+        if record.score > 0 {
+            GKLeaderboard.submitScore(
+                record.score,
+                context: 0,
+                player: player,
+                leaderboardIDs: [Constants.scoreLeaderboardID]
+            ) { _ in }
+        }
+        GKLeaderboard.submitScore(
+            record.level,
+            context: 0,
+            player: player,
+            leaderboardIDs: [Constants.levelLeaderboardID]
+        ) { _ in }
+    }
+
+    @discardableResult
+    func showLeaderboards(from presentingViewController: UIViewController?) -> Bool {
+        guard GKLocalPlayer.local.isAuthenticated else {
+            authenticate(presentingViewController: presentingViewController) {
+                nil
+            }
+            return false
+        }
+
+        if let window = presentingViewController?.view.window {
+            GKAccessPoint.shared.parentWindow = window
+        }
+        GKAccessPoint.shared.location = .topTrailing
+        GKAccessPoint.shared.isActive = true
+        GKAccessPoint.shared.trigger(state: .leaderboards) {
+            GKAccessPoint.shared.isActive = false
+        }
+        return true
+    }
+}
+
 private final class PlayerProfileStore {
     private enum Key {
         static let hasBestRun = "bloodstream.spritekit.profile.hasBestRun"
@@ -396,7 +577,9 @@ private final class PlayerProfileStore {
         static let bestDate = "bloodstream.spritekit.profile.bestDate"
         static let musicMuted = "bloodstream.spritekit.settings.musicMuted"
         static let sfxMuted = "bloodstream.spritekit.settings.sfxMuted"
+        static let hapticsMuted = "bloodstream.spritekit.settings.hapticsMuted"
         static let tiltEnabled = "bloodstream.spritekit.settings.tiltEnabled"
+        static let tiltSensitivity = "bloodstream.spritekit.settings.tiltSensitivity"
     }
 
     private let defaults: UserDefaults
@@ -434,9 +617,27 @@ private final class PlayerProfileStore {
         set { defaults.set(newValue, forKey: Key.sfxMuted) }
     }
 
+    var hapticsMuted: Bool {
+        get { defaults.bool(forKey: Key.hapticsMuted) }
+        set { defaults.set(newValue, forKey: Key.hapticsMuted) }
+    }
+
     var tiltEnabled: Bool {
         get { defaults.bool(forKey: Key.tiltEnabled) }
         set { defaults.set(newValue, forKey: Key.tiltEnabled) }
+    }
+
+    var tiltSensitivity: CGFloat {
+        get {
+            let stored = defaults.double(forKey: Key.tiltSensitivity)
+            guard stored > 0 else {
+                return Constants.tiltSensitivityDefault
+            }
+            return clamp(CGFloat(stored), Constants.tiltSensitivityMin, Constants.tiltSensitivityMax)
+        }
+        set {
+            defaults.set(Double(clamp(newValue, Constants.tiltSensitivityMin, Constants.tiltSensitivityMax)), forKey: Key.tiltSensitivity)
+        }
     }
 
     @discardableResult
@@ -531,6 +732,15 @@ private final class Enemy {
     var attackCooldown: TimeInterval = 0
     var shieldCycle: TimeInterval = 0
     var shieldOpen = false
+    var bossActionTimer: TimeInterval = 0
+    var bossTargetX: CGFloat = 0
+    var bossTargetY: CGFloat = 0
+    var orbitAngle: CGFloat = 0
+    var orbitRadius: CGFloat = 0
+    var orbitDirection: CGFloat = 1
+    var bossComboStep = 0
+    var bossTrailTimer: TimeInterval = 0
+    var deathAnimationActive = false
     var dead = false
 
     init(
@@ -669,12 +879,17 @@ final class GameScene: SKScene {
 
     private let profileStore = PlayerProfileStore()
     private let audio = AudioSystem()
+    private let haptics = HapticEngine()
+    private let gameCenter = GameCenterService()
     private let motionManager = CMMotionManager()
     private var atlasTexture: SKTexture?
     private var influenzaTexture: SKTexture?
     private var poxBossTexture: SKTexture?
     private var adenovirusTexture: SKTexture?
     private var filovirusTexture: SKTexture?
+    private var rotavirusTexture: SKTexture?
+    private var lyssavirusTexture: SKTexture?
+    private var norovirusTexture: SKTexture?
     private var startSheetTexture: SKTexture?
     private var titlePlaqueTexture: SKTexture?
     private var scoreFrameTexture: SKTexture?
@@ -687,6 +902,7 @@ final class GameScene: SKScene {
     private var missionFrameTexture: SKTexture?
     private var pauseCompleteTexture: SKTexture?
     private var gameOverPanelTexture: SKTexture?
+    private var howToPlayTexture: SKTexture?
     private var upgradeTitlePlaqueTexture: SKTexture?
     private var upgradeMedallionTextures: [UpgradeChoice: SKTexture] = [:]
     private var antibodyTextures: [SKTexture] = []
@@ -732,8 +948,12 @@ final class GameScene: SKScene {
     private var dangerMusicActive = false
     private var musicMuted = false
     private var sfxMuted = false
+    private var hapticsMuted = false
     private var lastRunWasBest = false
     private var restartConfirmVisible = false
+    private var audioSettingsVisible = false
+    private var inputSettingsVisible = false
+    private var howToPlayVisible = false
     private var rapidRank = 0
     private var pulseRank = 0
     private var dashRank = 0
@@ -746,6 +966,7 @@ final class GameScene: SKScene {
     private var tiltHasCalibration = false
     private var tiltNeutral = CGVector.zero
     private var tiltVector = CGVector.zero
+    private var tiltSensitivity = Constants.tiltSensitivityDefault
     private var player = PlayerState()
     private var enemies: [Enemy] = []
     private var redCells: [RedCell] = []
@@ -758,6 +979,7 @@ final class GameScene: SKScene {
     private var hitFlashesThisFrame = 0
     private var pressedKeys = Set<UIKeyboardHIDUsage>()
     private var joystickTouchId: ObjectIdentifier?
+    private var tiltSensitivityTouchId: ObjectIdentifier?
     private var fireTouchIds = Set<ObjectIdentifier>()
     private var joystickVector = CGVector.zero
     private var lockTargetId: Int?
@@ -771,6 +993,9 @@ final class GameScene: SKScene {
     private var healthFill: SKShapeNode?
     private var titleGroup = SKNode()
     private var startButton = SKShapeNode()
+    private var titleHowToPlayButton = SKShapeNode()
+    private var leaderboardsButton = SKShapeNode()
+    private var leaderboardsLabel: SKLabelNode?
     private var bestRunLabel: SKLabelNode?
     private var pauseOverlay = SKNode()
     private var upgradeOverlay = SKNode()
@@ -778,14 +1003,33 @@ final class GameScene: SKScene {
     private var pauseButton = SKShapeNode()
     private var resumeButton = SKShapeNode()
     private var restartButton = SKShapeNode()
+    private var audioSettingsButton = SKShapeNode()
     private var musicToggleButton = SKShapeNode()
     private var sfxToggleButton = SKShapeNode()
+    private var hapticsToggleButton = SKShapeNode()
+    private var inputSettingsButton = SKShapeNode()
+    private var howToPlayButton = SKShapeNode()
     private var tiltToggleButton = SKShapeNode()
     private var tiltCalibrateButton = SKShapeNode()
+    private var audioSettingsLabel: SKLabelNode?
     private var musicToggleLabel: SKLabelNode?
     private var sfxToggleLabel: SKLabelNode?
+    private var hapticsToggleLabel: SKLabelNode?
+    private var inputSettingsLabel: SKLabelNode?
+    private var howToPlayLabel: SKLabelNode?
     private var tiltToggleLabel: SKLabelNode?
     private var tiltCalibrateLabel: SKLabelNode?
+    private var audioSettingsOverlay = SKNode()
+    private var audioSettingsBackButton = SKShapeNode()
+    private var inputSettingsOverlay = SKNode()
+    private var inputSettingsBackButton = SKShapeNode()
+    private var howToPlayOverlay = SKNode()
+    private var howToPlayBackButton = SKShapeNode()
+    private var tiltSensitivityTrack = SKShapeNode()
+    private var tiltSensitivityFill = SKShapeNode()
+    private var tiltSensitivityKnob = SKShapeNode()
+    private var tiltSensitivityHitArea = SKShapeNode()
+    private var tiltSensitivityLabel: SKLabelNode?
     private var tiltCalibrationToast = SKNode()
     private var tiltCalibrationToastFrame: SKShapeNode?
     private var tiltCalibrationToastLabel: SKLabelNode?
@@ -799,6 +1043,7 @@ final class GameScene: SKScene {
     private var levelCompleteActionLabel: SKLabelNode?
     private var upgradeButtons: [SKShapeNode: UpgradeChoice] = [:]
     private var upgradeRankLabels: [UpgradeChoice: SKLabelNode] = [:]
+    private var upgradeNextRankLabels: [UpgradeChoice: SKLabelNode] = [:]
     private var upgradeButtonLabels: [UpgradeChoice: SKLabelNode] = [:]
     private var upgradePips: [UpgradeChoice: [SKShapeNode]] = [:]
     private var upgradeIntroLabel: SKLabelNode?
@@ -832,6 +1077,7 @@ final class GameScene: SKScene {
         setupControls()
         setupOverlays()
         applySavedProfileSettings()
+        configureGameCenter()
         showTitle()
     }
 
@@ -884,7 +1130,9 @@ final class GameScene: SKScene {
                 fireAntibody(force: true)
             } else if keyCode == .keyboardP {
                 togglePause()
-            } else if keyCode == .keyboardQ || keyCode == .keyboardE || keyCode == .keyboardReturnOrEnter {
+            } else if keyCode == .keyboardQ {
+                triggerDash(input: currentMovementVector())
+            } else if keyCode == .keyboardE || keyCode == .keyboardReturnOrEnter {
                 triggerPulse()
             } else if keyCode == .keyboardR, mode == .paused || mode == .gameOver || mode == .upgrade || mode == .levelComplete {
                 startRun()
@@ -945,49 +1193,107 @@ final class GameScene: SKScene {
             let basePoint = scenePointToBase(touch.location(in: self))
             let touchId = ObjectIdentifier(touch)
 
-            if mode == .title, startButton.contains(baseToStage(basePoint)) {
-                audio.playSFX(.uiSelect)
-                startRun()
-                continue
+            if mode == .title {
+                let stagePoint = baseToStage(basePoint)
+                if howToPlayVisible {
+                    if howToPlayBackButton.contains(stagePoint) {
+                        playUITap()
+                        closeHowToPlay()
+                    }
+                    continue
+                }
+                if startButton.contains(stagePoint) {
+                    playUITap()
+                    startRun()
+                    continue
+                }
+                if titleHowToPlayButton.contains(stagePoint) {
+                    playUITap()
+                    openHowToPlay()
+                    continue
+                }
+                if leaderboardsButton.contains(stagePoint) {
+                    playUITap()
+                    if !gameCenter.showLeaderboards(from: presentingViewController()) {
+                        showBanner("Sign into Game Center")
+                    }
+                    continue
+                }
             }
 
             if mode == .gameOver, tryAgainButton.contains(baseToStage(basePoint)) {
-                audio.playSFX(.uiSelect)
+                playUITap()
                 startRun()
                 continue
             }
 
             if mode == .paused {
                 let stagePoint = baseToStage(basePoint)
-                if restartConfirmVisible {
-                    if restartConfirmButton.contains(stagePoint) {
+                if audioSettingsVisible {
+                    if audioSettingsBackButton.contains(stagePoint) {
+                        playUITap()
+                        closeAudioSettings()
+                    } else if musicToggleButton.contains(stagePoint) {
+                        setMusicMuted(!musicMuted)
+                        playUITap()
+                    } else if sfxToggleButton.contains(stagePoint) {
+                        setSFXMuted(!sfxMuted)
+                        playUITap()
+                    } else if hapticsToggleButton.contains(stagePoint) {
+                        setHapticsMuted(!hapticsMuted)
                         audio.playSFX(.uiSelect)
+                        haptics.play(.selection)
+                    }
+                } else if inputSettingsVisible {
+                    if inputSettingsBackButton.contains(stagePoint) {
+                        playUITap()
+                        closeInputSettings()
+                    } else if tiltToggleButton.contains(stagePoint) {
+                        toggleTiltMode()
+                        playUITap()
+                    } else if tiltCalibrateButton.contains(stagePoint) {
+                        let calibrated = calibrateTilt(showBannerText: false)
+                        showTiltCalibrationFeedback(success: calibrated)
+                        playUITap()
+                    } else if tiltSensitivityHitArea.contains(stagePoint) {
+                        tiltSensitivityTouchId = touchId
+                        setTiltSensitivity(fromBaseX: basePoint.x)
+                        haptics.play(.selection)
+                    }
+                } else if howToPlayVisible {
+                    if howToPlayBackButton.contains(stagePoint) {
+                        playUITap()
+                        closeHowToPlay()
+                    }
+                } else if restartConfirmVisible {
+                    if restartConfirmButton.contains(stagePoint) {
+                        playUITap()
                         startRun()
                     } else if restartCancelButton.contains(stagePoint) {
                         audio.playSFX(.pauseResume)
+                        haptics.play(.selection)
                         restartConfirmVisible = false
                         restartConfirmOverlay.isHidden = true
                     }
                 } else if resumeButton.contains(stagePoint) {
                     audio.playSFX(.pauseResume)
+                    haptics.play(.selection)
                     togglePause()
                 } else if restartButton.contains(stagePoint) {
                     audio.playSFX(.restartConfirm)
+                    haptics.play(.mediumImpact)
+                    closePauseSubmenus()
                     restartConfirmVisible = true
                     restartConfirmOverlay.isHidden = false
-                } else if musicToggleButton.contains(stagePoint) {
-                    setMusicMuted(!musicMuted)
-                    audio.playSFX(.uiSelect)
-                } else if sfxToggleButton.contains(stagePoint) {
-                    setSFXMuted(!sfxMuted)
-                    audio.playSFX(.uiSelect)
-                } else if tiltToggleButton.contains(stagePoint) {
-                    toggleTiltMode()
-                    audio.playSFX(.uiSelect)
-                } else if tiltCalibrateButton.contains(stagePoint) {
-                    let calibrated = calibrateTilt(showBannerText: false)
-                    showTiltCalibrationFeedback(success: calibrated)
-                    audio.playSFX(.uiSelect)
+                } else if audioSettingsButton.contains(stagePoint) {
+                    playUITap()
+                    openAudioSettings()
+                } else if inputSettingsButton.contains(stagePoint) {
+                    playUITap()
+                    openInputSettings()
+                } else if howToPlayButton.contains(stagePoint) {
+                    playUITap()
+                    openHowToPlay()
                 }
                 continue
             }
@@ -995,7 +1301,7 @@ final class GameScene: SKScene {
             if mode == .levelComplete {
                 let stagePoint = baseToStage(basePoint)
                 if levelCompleteActionButton.contains(stagePoint) {
-                    audio.playSFX(.uiSelect)
+                    playUITap()
                     openUpgradeScreenOrContinue()
                 }
                 continue
@@ -1004,7 +1310,7 @@ final class GameScene: SKScene {
             if mode == .upgrade {
                 let stagePoint = baseToStage(basePoint)
                 if allUpgradesComplete() {
-                    audio.playSFX(.uiSelect)
+                    playUITap()
                     startNextLevel()
                     continue
                 }
@@ -1036,8 +1342,14 @@ final class GameScene: SKScene {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for touch in touches where ObjectIdentifier(touch) == joystickTouchId {
-            updateJoystick(with: scenePointToBase(touch.location(in: self)))
+        for touch in touches {
+            let touchId = ObjectIdentifier(touch)
+            let basePoint = scenePointToBase(touch.location(in: self))
+            if touchId == tiltSensitivityTouchId {
+                setTiltSensitivity(fromBaseX: basePoint.x)
+            } else if touchId == joystickTouchId {
+                updateJoystick(with: basePoint)
+            }
         }
     }
 
@@ -1095,6 +1407,9 @@ final class GameScene: SKScene {
         poxBossTexture = texture(named: "pox-brick-boss-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         adenovirusTexture = texture(named: "adenovirus-prism-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         filovirusTexture = texture(named: "filovirus-ribbon-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
+        rotavirusTexture = texture(named: "rotavirus-gyre-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
+        lyssavirusTexture = texture(named: "lyssavirus-lance-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
+        norovirusTexture = texture(named: "norovirus-swarm-core-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         startSheetTexture = texture(named: "start-screen-asset-sheet", extension: "png", subdirectory: "Assets/ui")
         titlePlaqueTexture = texture(named: "start-title-plaque", extension: "png", subdirectory: "Assets/ui")
         scoreFrameTexture = texture(named: "hud-game-score-frame", extension: "png", subdirectory: "Assets/ui")
@@ -1107,6 +1422,7 @@ final class GameScene: SKScene {
         missionFrameTexture = texture(named: "hud-mission-frame", extension: "png", subdirectory: "Assets/ui")
         pauseCompleteTexture = texture(named: "pause-complete-ui-sheet", extension: "png", subdirectory: "Assets/ui")
         gameOverPanelTexture = texture(named: "game-over-summary-panel", extension: "png", subdirectory: "Assets/ui")
+        howToPlayTexture = texture(named: "how-to-play-illustrated-v2-controls", extension: "png", subdirectory: "Assets/ui")
         upgradeTitlePlaqueTexture = texture(named: "upgrade-title-plaque-clean", extension: "png", subdirectory: "Assets/ui")
         upgradeMedallionTextures.removeAll()
         for definition in Constants.upgrades {
@@ -1278,7 +1594,8 @@ final class GameScene: SKScene {
         let banner = label("", size: 24, color: UIColor(red: 1.0, green: 0.82, blue: 0.32, alpha: 1.0))
         banner.position = baseToStage(CGPoint(x: 640, y: 196))
         banner.alpha = 0
-        hudNode.addChild(banner)
+        banner.zPosition = ZLayer.overlay + 72
+        overlayNode.addChild(banner)
         bannerLabel = banner
 
         if let levelFrameTexture {
@@ -1453,35 +1770,45 @@ final class GameScene: SKScene {
         titleGroup.removeAllChildren()
         titleGroup.addChild(overlayShade(alpha: 0.42))
 
+        let centerX = Constants.baseSize.width * 0.5
+        let titleCenterX = centerX - 1
+        let bestRunCenterX = centerX + 25
+        let startCenterX = centerX - 3
+        let titleY: CGFloat = 198
+        let bestRunY: CGFloat = 404
+        let startY: CGFloat = 548
+        let howToPlayY: CGFloat = 622
+        let gameCenterY: CGFloat = 674
+
         if let startSheetTexture {
             let plaque = SKSpriteNode(texture: regionTexture(from: startSheetTexture, frame: AtlasFrames.startTitlePlaque))
-            plaque.size = CGSize(width: 800, height: 235)
-            plaque.position = baseToStage(CGPoint(x: 640, y: 214))
+            plaque.size = CGSize(width: 820, height: 241)
+            plaque.position = baseToStage(CGPoint(x: titleCenterX, y: titleY))
             plaque.zPosition = ZLayer.overlay + 1
             titleGroup.addChild(plaque)
         } else if let titlePlaqueTexture {
             let plaque = SKSpriteNode(texture: titlePlaqueTexture)
             plaque.size = CGSize(width: 680, height: 158)
-            plaque.position = baseToStage(CGPoint(x: 640, y: 214))
+            plaque.position = baseToStage(CGPoint(x: titleCenterX, y: titleY))
             plaque.zPosition = ZLayer.overlay + 1
             titleGroup.addChild(plaque)
         }
 
         let title = label("Bloodstream Defender", size: 48, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
-        title.position = baseToStage(CGPoint(x: 640, y: 232))
+        title.position = baseToStage(CGPoint(x: titleCenterX, y: titleY + 18))
         title.zPosition = ZLayer.overlay + 4
         titleGroup.addChild(title)
 
         if let startSheetTexture {
             let bestFrame = SKSpriteNode(texture: regionTexture(from: startSheetTexture, frame: AtlasFrames.startBestRunFrame))
-            bestFrame.size = CGSize(width: 560, height: 86)
-            bestFrame.position = baseToStage(CGPoint(x: 640, y: 408))
+            bestFrame.size = CGSize(width: 1080, height: 170)
+            bestFrame.position = baseToStage(CGPoint(x: bestRunCenterX, y: bestRunY))
             bestFrame.zPosition = ZLayer.overlay + 1
             titleGroup.addChild(bestFrame)
         }
 
-        let bestRun = multilineLabel("", size: 14, color: UIColor(red: 1.0, green: 0.92, blue: 0.64, alpha: 1.0), width: 500, lines: 2)
-        bestRun.position = baseToStage(CGPoint(x: 640, y: 407))
+        let bestRun = multilineLabel("", size: 30, color: UIColor(red: 1.0, green: 0.92, blue: 0.64, alpha: 1.0), width: 920, lines: 2)
+        bestRun.position = baseToStage(CGPoint(x: bestRunCenterX, y: bestRunY))
         bestRun.zPosition = ZLayer.overlay + 4
         titleGroup.addChild(bestRun)
         bestRunLabel = bestRun
@@ -1489,7 +1816,7 @@ final class GameScene: SKScene {
         if let startSheetTexture {
             let startFrame = SKSpriteNode(texture: regionTexture(from: startSheetTexture, frame: AtlasFrames.startRunButton))
             startFrame.size = CGSize(width: 380, height: 78)
-            startFrame.position = baseToStage(CGPoint(x: 640, y: 548))
+            startFrame.position = baseToStage(CGPoint(x: startCenterX, y: startY))
             startFrame.zPosition = ZLayer.overlay + 1
             titleGroup.addChild(startFrame)
         }
@@ -1498,14 +1825,33 @@ final class GameScene: SKScene {
         startButton.fillColor = UIColor(red: 0.10, green: 0.74, blue: 0.82, alpha: startSheetTexture == nil ? 0.88 : 0.001)
         startButton.strokeColor = startSheetTexture == nil ? UIColor(red: 1.0, green: 0.88, blue: 0.42, alpha: 0.95) : .clear
         startButton.lineWidth = startSheetTexture == nil ? 3 : 0
-        startButton.position = baseToStage(CGPoint(x: 640, y: 548))
+        startButton.position = baseToStage(CGPoint(x: startCenterX, y: startY))
         startButton.zPosition = ZLayer.overlay + 5
         titleGroup.addChild(startButton)
 
         let startLabel = label("START RUN", size: 26, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
-        startLabel.position = baseToStage(CGPoint(x: 640, y: 548))
+        startLabel.position = baseToStage(CGPoint(x: startCenterX, y: startY))
         startLabel.zPosition = ZLayer.overlay + 6
         titleGroup.addChild(startLabel)
+
+        let howToPlay = addArtButton(
+            to: titleGroup,
+            center: CGPoint(x: centerX, y: howToPlayY),
+            size: CGSize(width: 248, height: 42),
+            title: "HOW TO PLAY",
+            fontSize: 15
+        )
+        titleHowToPlayButton = howToPlay.shape
+
+        let leaderboards = addArtButton(
+            to: titleGroup,
+            center: CGPoint(x: centerX, y: gameCenterY),
+            size: CGSize(width: 248, height: 42),
+            title: "LEADERBOARDS",
+            fontSize: 15
+        )
+        leaderboardsButton = leaderboards.shape
+        leaderboardsLabel = leaderboards.label
 
         overlayNode.addChild(titleGroup)
     }
@@ -1537,34 +1883,24 @@ final class GameScene: SKScene {
         let resume = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 252), size: CGSize(width: 192, height: 42), title: "Resume", fontSize: 17)
         resumeButton = resume.shape
 
-        let audioLabel = label("AUDIO", size: 13, color: UIColor(red: 0.45, green: 1.0, blue: 1.0, alpha: 1.0))
-        audioLabel.position = baseToStage(CGPoint(x: pauseContentX, y: 313))
-        pauseOverlay.addChild(audioLabel)
+        let audio = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 318), size: CGSize(width: 210, height: 42), title: "Audio & Feedback", fontSize: 14)
+        audioSettingsButton = audio.shape
+        audioSettingsLabel = audio.label
 
-        let music = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 358), size: CGSize(width: 192, height: 42), title: "Music: On", fontSize: 15)
-        musicToggleButton = music.shape
-        musicToggleLabel = music.label
+        let input = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 376), size: CGSize(width: 210, height: 42), title: "Input Settings", fontSize: 15)
+        inputSettingsButton = input.shape
+        inputSettingsLabel = input.label
 
-        let sfx = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 410), size: CGSize(width: 192, height: 42), title: "Effects: On", fontSize: 15)
-        sfxToggleButton = sfx.shape
-        sfxToggleLabel = sfx.label
+        let howToPlay = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 434), size: CGSize(width: 210, height: 42), title: "How to Play", fontSize: 15)
+        howToPlayButton = howToPlay.shape
+        howToPlayLabel = howToPlay.label
 
-        let inputLabel = label("INPUT", size: 13, color: UIColor(red: 0.45, green: 1.0, blue: 1.0, alpha: 1.0))
-        inputLabel.position = baseToStage(CGPoint(x: pauseContentX, y: 462))
-        pauseOverlay.addChild(inputLabel)
-
-        let tilt = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX - 70, y: 502), size: CGSize(width: 126, height: 40), title: "Tilt: Off", fontSize: 14)
-        tiltToggleButton = tilt.shape
-        tiltToggleLabel = tilt.label
-
-        let calibrate = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX + 70, y: 502), size: CGSize(width: 126, height: 40), title: "Calibrate", fontSize: 14)
-        tiltCalibrateButton = calibrate.shape
-        tiltCalibrateLabel = calibrate.label
-
-        setupTiltCalibrationToast(center: CGPoint(x: pauseContentX, y: 502))
-
-        let restart = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 558), size: CGSize(width: 192, height: 42), title: "Restart Run", fontSize: 15)
+        let restart = addArtButton(to: pauseOverlay, center: CGPoint(x: pauseContentX, y: 500), size: CGSize(width: 210, height: 42), title: "Restart Run", fontSize: 15)
         restartButton = restart.shape
+
+        setupAudioSettingsOverlay()
+        setupInputSettingsOverlay()
+        setupHowToPlayOverlay()
 
         setupRestartConfirmOverlay()
         restartConfirmOverlay.zPosition = ZLayer.overlay + 80
@@ -1572,6 +1908,207 @@ final class GameScene: SKScene {
 
         pauseOverlay.isHidden = true
         overlayNode.addChild(pauseOverlay)
+    }
+
+    private func setupAudioSettingsOverlay() {
+        audioSettingsOverlay.removeAllChildren()
+        audioSettingsOverlay.zPosition = ZLayer.overlay + 58
+
+        let shade = overlayShade(alpha: 0.62)
+        shade.zPosition = ZLayer.overlay
+        audioSettingsOverlay.addChild(shade)
+
+        let panel = SKShapeNode(rectOf: CGSize(width: 560, height: 318), cornerRadius: 24)
+        panel.fillColor = UIColor(red: 0.025, green: 0.0, blue: 0.025, alpha: 0.98)
+        panel.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.86)
+        panel.lineWidth = 3
+        panel.glowWidth = 6
+        panel.position = baseToStage(CGPoint(x: 640, y: 396))
+        panel.zPosition = ZLayer.overlay + 1
+        audioSettingsOverlay.addChild(panel)
+
+        let title = label("Audio & Feedback", size: 27, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        title.position = baseToStage(CGPoint(x: 640, y: 266))
+        title.zPosition = ZLayer.overlay + 61
+        audioSettingsOverlay.addChild(title)
+
+        let back = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 470, y: 318), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+        audioSettingsBackButton = back.shape
+
+        let music = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 364), size: CGSize(width: 204, height: 42), title: "Music: On", fontSize: 15)
+        musicToggleButton = music.shape
+        musicToggleLabel = music.label
+
+        let sfx = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 424), size: CGSize(width: 204, height: 42), title: "Effects: On", fontSize: 15)
+        sfxToggleButton = sfx.shape
+        sfxToggleLabel = sfx.label
+
+        let haptics = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 484), size: CGSize(width: 204, height: 42), title: "Haptics: On", fontSize: 15)
+        hapticsToggleButton = haptics.shape
+        hapticsToggleLabel = haptics.label
+
+        audioSettingsOverlay.isHidden = true
+        pauseOverlay.addChild(audioSettingsOverlay)
+    }
+
+    private func setupInputSettingsOverlay() {
+        inputSettingsOverlay.removeAllChildren()
+        inputSettingsOverlay.zPosition = ZLayer.overlay + 58
+
+        let shade = overlayShade(alpha: 0.62)
+        shade.zPosition = ZLayer.overlay
+        inputSettingsOverlay.addChild(shade)
+
+        let panel = SKShapeNode(rectOf: CGSize(width: 590, height: 330), cornerRadius: 24)
+        panel.fillColor = UIColor(red: 0.025, green: 0.0, blue: 0.025, alpha: 0.98)
+        panel.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.86)
+        panel.lineWidth = 3
+        panel.glowWidth = 6
+        panel.position = baseToStage(CGPoint(x: 640, y: 396))
+        panel.zPosition = ZLayer.overlay + 1
+        inputSettingsOverlay.addChild(panel)
+
+        let title = label("Input Settings", size: 27, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        title.position = baseToStage(CGPoint(x: 640, y: 266))
+        title.zPosition = ZLayer.overlay + 61
+        inputSettingsOverlay.addChild(title)
+
+        let back = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 458, y: 314), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+        inputSettingsBackButton = back.shape
+
+        let tilt = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 574, y: 370), size: CGSize(width: 154, height: 40), title: "Tilt: Off", fontSize: 14)
+        tiltToggleButton = tilt.shape
+        tiltToggleLabel = tilt.label
+
+        let calibrate = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 738, y: 370), size: CGSize(width: 154, height: 40), title: "Calibrate", fontSize: 14)
+        tiltCalibrateButton = calibrate.shape
+        tiltCalibrateLabel = calibrate.label
+
+        let sensitivityTitle = label("TILT SENSITIVITY", size: 13, color: UIColor(red: 0.45, green: 1.0, blue: 1.0, alpha: 1.0))
+        sensitivityTitle.position = baseToStage(CGPoint(x: 640, y: 424))
+        sensitivityTitle.zPosition = ZLayer.overlay + 61
+        inputSettingsOverlay.addChild(sensitivityTitle)
+
+        let sliderCenter = CGPoint(
+            x: Constants.tiltSensitivitySliderLeftX + Constants.tiltSensitivitySliderWidth * 0.5,
+            y: Constants.tiltSensitivitySliderY
+        )
+        tiltSensitivityTrack = SKShapeNode(rectOf: CGSize(width: Constants.tiltSensitivitySliderWidth, height: 8), cornerRadius: 4)
+        tiltSensitivityTrack.fillColor = UIColor(red: 0.04, green: 0.0, blue: 0.04, alpha: 0.92)
+        tiltSensitivityTrack.strokeColor = UIColor(red: 0.72, green: 1.0, blue: 1.0, alpha: 0.66)
+        tiltSensitivityTrack.lineWidth = 1.5
+        tiltSensitivityTrack.position = baseToStage(sliderCenter)
+        tiltSensitivityTrack.zPosition = ZLayer.overlay + 61
+        inputSettingsOverlay.addChild(tiltSensitivityTrack)
+
+        tiltSensitivityFill = SKShapeNode(rectOf: CGSize(width: Constants.tiltSensitivitySliderWidth, height: 8), cornerRadius: 4)
+        tiltSensitivityFill.fillColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.78)
+        tiltSensitivityFill.strokeColor = .clear
+        tiltSensitivityFill.zPosition = ZLayer.overlay + 62
+        inputSettingsOverlay.addChild(tiltSensitivityFill)
+
+        tiltSensitivityKnob = SKShapeNode(circleOfRadius: 18)
+        tiltSensitivityKnob.fillColor = UIColor(red: 1.0, green: 0.92, blue: 0.46, alpha: 0.96)
+        tiltSensitivityKnob.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.96)
+        tiltSensitivityKnob.lineWidth = 2
+        tiltSensitivityKnob.glowWidth = 4
+        tiltSensitivityKnob.zPosition = ZLayer.overlay + 64
+        inputSettingsOverlay.addChild(tiltSensitivityKnob)
+
+        tiltSensitivityHitArea = SKShapeNode(rectOf: CGSize(width: Constants.tiltSensitivitySliderWidth + 64, height: 58), cornerRadius: 14)
+        tiltSensitivityHitArea.fillColor = UIColor(red: 0, green: 0, blue: 0, alpha: 0.001)
+        tiltSensitivityHitArea.strokeColor = .clear
+        tiltSensitivityHitArea.position = baseToStage(sliderCenter)
+        tiltSensitivityHitArea.zPosition = ZLayer.overlay + 65
+        inputSettingsOverlay.addChild(tiltSensitivityHitArea)
+
+        let valueLabel = label("", size: 15, color: UIColor(red: 1.0, green: 0.92, blue: 0.64, alpha: 1.0))
+        valueLabel.position = baseToStage(CGPoint(x: 640, y: 486))
+        valueLabel.zPosition = ZLayer.overlay + 61
+        inputSettingsOverlay.addChild(valueLabel)
+        tiltSensitivityLabel = valueLabel
+
+        setupTiltCalibrationToast(center: CGPoint(x: 640, y: 548))
+        inputSettingsOverlay.addChild(tiltCalibrationToast)
+
+        inputSettingsOverlay.isHidden = true
+        pauseOverlay.addChild(inputSettingsOverlay)
+        updateTiltSensitivitySlider()
+    }
+
+    private func setupHowToPlayOverlay() {
+        howToPlayOverlay.removeAllChildren()
+        howToPlayOverlay.zPosition = ZLayer.overlay + 58
+
+        let shade = overlayShade(alpha: howToPlayTexture == nil ? 0.62 : 0.36)
+        shade.zPosition = ZLayer.overlay
+        howToPlayOverlay.addChild(shade)
+
+        if let howToPlayTexture {
+            let page = SKSpriteNode(texture: howToPlayTexture)
+            page.size = Constants.baseSize
+            page.position = baseToStage(CGPoint(x: Constants.baseSize.width * 0.5, y: Constants.baseSize.height * 0.5))
+            page.zPosition = ZLayer.overlay + 1
+            howToPlayOverlay.addChild(page)
+
+            let back = addArtButton(to: howToPlayOverlay, center: CGPoint(x: 132, y: 66), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+            howToPlayBackButton = back.shape
+
+            howToPlayOverlay.isHidden = true
+            overlayNode.addChild(howToPlayOverlay)
+            return
+        }
+
+        let panel = SKShapeNode(rectOf: CGSize(width: 780, height: 448), cornerRadius: 24)
+        panel.fillColor = UIColor(red: 0.025, green: 0.0, blue: 0.025, alpha: 0.98)
+        panel.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.86)
+        panel.lineWidth = 3
+        panel.glowWidth = 6
+        panel.position = baseToStage(CGPoint(x: 640, y: 394))
+        panel.zPosition = ZLayer.overlay + 1
+        howToPlayOverlay.addChild(panel)
+
+        let title = label("How to Play", size: 29, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
+        title.position = baseToStage(CGPoint(x: 640, y: 204))
+        title.zPosition = ZLayer.overlay + 61
+        howToPlayOverlay.addChild(title)
+
+        let back = addArtButton(to: howToPlayOverlay, center: CGPoint(x: 330, y: 258), size: CGSize(width: 126, height: 38), title: "Back", fontSize: 14)
+        howToPlayBackButton = back.shape
+
+        addHowToPlaySection(
+            title: "Core Loop",
+            body: "Move through the vessel, fire antibodies, and survive until each section is clear.\nDash slips out of danger. Pulse clears nearby threats once unlocked.",
+            x: 455,
+            y: 310
+        )
+        addHowToPlaySection(
+            title: "Adaptations",
+            body: "After sections, choose antibody output, complement pulse, or chemotaxis movement.\nEach rank stacks, so a run slowly becomes your build.",
+            x: 455,
+            y: 456
+        )
+        addHowToPlaySection(
+            title: "Boss Reads",
+            body: "Rotavirus: shoot through open shield windows.\nLyssavirus: dodge the charge, then punish the exposed recovery.\nNorovirus: clear decoys and sidestep launched orbs.",
+            x: 800,
+            y: 310
+        )
+
+        howToPlayOverlay.isHidden = true
+        overlayNode.addChild(howToPlayOverlay)
+    }
+
+    private func addHowToPlaySection(title: String, body: String, x: CGFloat, y: CGFloat) {
+        let heading = label(title, size: 17, color: UIColor(red: 0.45, green: 1.0, blue: 1.0, alpha: 1.0))
+        heading.position = baseToStage(CGPoint(x: x, y: y))
+        heading.zPosition = ZLayer.overlay + 61
+        howToPlayOverlay.addChild(heading)
+
+        let bodyLabel = multilineLabel(body, size: 14, color: UIColor(red: 1.0, green: 0.92, blue: 0.76, alpha: 1.0), width: 278, lines: 5)
+        bodyLabel.position = baseToStage(CGPoint(x: x, y: y + 38))
+        bodyLabel.zPosition = ZLayer.overlay + 61
+        howToPlayOverlay.addChild(bodyLabel)
     }
 
     private func setupTiltCalibrationToast(center: CGPoint) {
@@ -1595,8 +2132,6 @@ final class GameScene: SKScene {
         text.position = .zero
         tiltCalibrationToast.addChild(text)
         tiltCalibrationToastLabel = text
-
-        pauseOverlay.addChild(tiltCalibrationToast)
     }
 
     private func setupRestartConfirmOverlay() {
@@ -1670,6 +2205,7 @@ final class GameScene: SKScene {
         upgradeOverlay.removeAllChildren()
         upgradeButtons.removeAll()
         upgradeRankLabels.removeAll()
+        upgradeNextRankLabels.removeAll()
         upgradeButtonLabels.removeAll()
         upgradePips.removeAll()
 
@@ -1696,12 +2232,12 @@ final class GameScene: SKScene {
 
         for (definition, center, branchTitle) in branchTitleData {
             let branchPosition = baseToStage(CGPoint(x: center.x, y: 240))
-            let branchShadow = label(branchTitle, size: 13, color: UIColor(red: 0.0, green: 0.0, blue: 0.02, alpha: 0.86))
+            let branchShadow = label(branchTitle, size: 14.5, color: UIColor(red: 0.0, green: 0.0, blue: 0.02, alpha: 0.86))
             branchShadow.position = CGPoint(x: branchPosition.x + 1.5, y: branchPosition.y - 1.5)
             branchShadow.zPosition = ZLayer.overlay + 9
             upgradeOverlay.addChild(branchShadow)
 
-            let branch = label(branchTitle, size: 13, color: UIColor(red: 0.76, green: 1.0, blue: 1.0, alpha: 1.0))
+            let branch = label(branchTitle, size: 14.5, color: UIColor(red: 0.76, green: 1.0, blue: 1.0, alpha: 1.0))
             branch.position = branchPosition
             branch.zPosition = ZLayer.overlay + 10
             upgradeOverlay.addChild(branch)
@@ -1713,7 +2249,7 @@ final class GameScene: SKScene {
     }
 
     private func addUpgradeCard(definition: UpgradeDefinition, center: CGPoint) {
-        let card = SKShapeNode(rectOf: CGSize(width: 276, height: 270), cornerRadius: 12)
+        let card = SKShapeNode(rectOf: CGSize(width: 306, height: 342), cornerRadius: 12)
         card.fillColor = upgradeCardFillColor(for: definition.choice)
         card.strokeColor = definition.accent.withAlphaComponent(0.90)
         card.lineWidth = 2
@@ -1725,37 +2261,54 @@ final class GameScene: SKScene {
 
         if let medallionTexture = upgradeMedallionTextures[definition.choice] {
             let medallion = SKSpriteNode(texture: medallionTexture)
-            medallion.position = baseToStage(CGPoint(x: center.x, y: center.y - 160))
+            medallion.position = baseToStage(CGPoint(x: center.x, y: center.y - 174))
             medallion.size = CGSize(width: 56, height: 56)
             medallion.zPosition = ZLayer.overlay + 5
             upgradeOverlay.addChild(medallion)
         }
 
-        let termLabel = label(definition.term.uppercased(), size: 10, color: definition.accent)
-        termLabel.position = baseToStage(CGPoint(x: center.x, y: center.y - 102))
+        let termLabel = label(definition.term.uppercased(), size: 13.4, color: definition.accent)
+        termLabel.position = baseToStage(CGPoint(x: center.x, y: center.y - 140))
         upgradeOverlay.addChild(termLabel)
 
-        let titleLabel = multilineLabel(definition.title, size: 19, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0), width: 236, lines: 2)
-        titleLabel.position = baseToStage(CGPoint(x: center.x, y: center.y - 70))
+        let titleSize: CGFloat = definition.title.count > 20 ? 24 : 25
+        let titleLabel = label(definition.title, size: titleSize, color: UIColor(red: 1.0, green: 0.94, blue: 0.78, alpha: 1.0))
+        titleLabel.position = baseToStage(CGPoint(x: center.x, y: center.y - 106))
         upgradeOverlay.addChild(titleLabel)
 
-        let controlLabel = multilineLabel(definition.controls, size: 12, color: UIColor(red: 0.66, green: 1.0, blue: 1.0, alpha: 1.0), width: 224, lines: 2)
-        controlLabel.position = baseToStage(CGPoint(x: center.x, y: center.y - 10))
+        let controlLabel = multilineLabel(definition.controls, size: 16.4, color: UIColor(red: 0.66, green: 1.0, blue: 1.0, alpha: 1.0), width: 276, lines: 2)
+        controlLabel.position = baseToStage(CGPoint(x: center.x, y: center.y - 58))
         upgradeOverlay.addChild(controlLabel)
 
-        let bodyLabel = multilineLabel(definition.body, size: 11, color: UIColor(red: 0.88, green: 0.94, blue: 0.9, alpha: 1.0), width: 216, lines: 3)
-        bodyLabel.position = baseToStage(CGPoint(x: center.x, y: center.y + 46))
+        let bodyLabel = multilineLabel(definition.body, size: 14.8, color: UIColor(red: 0.88, green: 0.94, blue: 0.9, alpha: 1.0), width: 282, lines: 4)
+        bodyLabel.position = baseToStage(CGPoint(x: center.x, y: center.y + 4))
         upgradeOverlay.addChild(bodyLabel)
 
-        let rankLabel = multilineLabel("", size: 12, color: UIColor(red: 1.0, green: 0.83, blue: 0.34, alpha: 1.0), width: 228, lines: 2)
-        rankLabel.position = baseToStage(CGPoint(x: center.x, y: center.y + 92))
+        let progressPanel = SKShapeNode(rectOf: CGSize(width: 278, height: 96), cornerRadius: 8)
+        progressPanel.fillColor = UIColor(red: 0.0, green: 0.0, blue: 0.015, alpha: 0.32)
+        progressPanel.strokeColor = definition.accent.withAlphaComponent(0.28)
+        progressPanel.lineWidth = 1
+        progressPanel.position = baseToStage(CGPoint(x: center.x, y: center.y + 96))
+        progressPanel.zPosition = ZLayer.overlay + 3
+        upgradeOverlay.addChild(progressPanel)
+
+        let currentX = center.x - 129
+        let rankLabel = multilineLabel("", size: 14.4, color: UIColor(red: 0.82, green: 1.0, blue: 1.0, alpha: 1.0), width: 258, lines: 2)
+        rankLabel.horizontalAlignmentMode = .left
+        rankLabel.position = baseToStage(CGPoint(x: currentX, y: center.y + 68))
         upgradeOverlay.addChild(rankLabel)
         upgradeRankLabels[definition.choice] = rankLabel
+
+        let nextLabel = multilineLabel("", size: 15.0, color: UIColor(red: 1.0, green: 0.83, blue: 0.34, alpha: 1.0), width: 258, lines: 2)
+        nextLabel.horizontalAlignmentMode = .left
+        nextLabel.position = baseToStage(CGPoint(x: currentX, y: center.y + 116))
+        upgradeOverlay.addChild(nextLabel)
+        upgradeNextRankLabels[definition.choice] = nextLabel
 
         var pips: [SKShapeNode] = []
         for index in 0..<Constants.maxUpgradeRank {
             let pip = SKShapeNode(circleOfRadius: 6)
-            pip.position = baseToStage(CGPoint(x: center.x - 39 + CGFloat(index) * 26, y: center.y + 118))
+            pip.position = baseToStage(CGPoint(x: center.x - 39 + CGFloat(index) * 26, y: center.y + 152))
             pip.lineWidth = 1.5
             pip.zPosition = ZLayer.overlay + 5
             upgradeOverlay.addChild(pip)
@@ -1763,7 +2316,7 @@ final class GameScene: SKScene {
         }
         upgradePips[definition.choice] = pips
 
-        let pick = addArtButton(to: upgradeOverlay, center: CGPoint(x: center.x, y: center.y + 158), size: CGSize(width: 174, height: 30), title: "Choose", fontSize: 13)
+        let pick = addArtButton(to: upgradeOverlay, center: CGPoint(x: center.x, y: center.y + 200), size: CGSize(width: 188, height: 30), title: "Choose", fontSize: 13)
         upgradeButtons[pick.shape] = definition.choice
         upgradeButtonLabels[definition.choice] = pick.label
     }
@@ -1786,7 +2339,7 @@ final class GameScene: SKScene {
         gameOverOverlay.addChild(overlayShade(alpha: 0.66))
 
         let panelCenter = CGPoint(x: 640, y: 364)
-        let panelScale: CGFloat = 1.10
+        let panelScale: CGFloat = 1.45
         func panelPoint(_ point: CGPoint) -> CGPoint {
             CGPoint(
                 x: panelCenter.x + (point.x - panelCenter.x) * panelScale,
@@ -1820,7 +2373,7 @@ final class GameScene: SKScene {
 
         let rightBoxTextX: CGFloat = 686
 
-        let record = multilineLabel("", size: 6.7 * panelScale, color: UIColor(red: 1.0, green: 0.82, blue: 0.34, alpha: 1.0), width: 172 * panelScale, lines: 3)
+        let record = multilineLabel("", size: 11.4 * panelScale, color: UIColor(red: 1.0, green: 0.82, blue: 0.34, alpha: 1.0), width: 230 * panelScale, lines: 3)
         record.horizontalAlignmentMode = .left
         record.position = baseToStage(panelPoint(CGPoint(x: rightBoxTextX, y: 456)))
         gameOverOverlay.addChild(record)
@@ -1828,19 +2381,19 @@ final class GameScene: SKScene {
 
         let leftStatTextX: CGFloat = 446
         let statDefs: [(key: String, title: String, titleY: CGFloat, valueY: CGFloat)] = [
-            ("score", "FINAL SCORE", 309, 322),
-            ("level", "LEVEL REACHED", 357, 370),
-            ("sections", "SECTIONS CLEARED", 405, 418),
-            ("virions", "VIRIONS NEUTRALIZED", 453, 466)
+            ("score", "FINAL SCORE", 308, 322),
+            ("level", "LEVEL REACHED", 356, 370),
+            ("sections", "SECTIONS CLEARED", 404, 418),
+            ("virions", "VIRIONS NEUTRALIZED", 452, 466)
         ]
 
         for (key, title, titleY, valueY) in statDefs {
-            let titleLabel = label(title, size: 5.8 * panelScale, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
+            let titleLabel = label(title, size: 10.1 * panelScale, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
             titleLabel.horizontalAlignmentMode = .left
             titleLabel.position = baseToStage(panelPoint(CGPoint(x: leftStatTextX, y: titleY)))
             gameOverOverlay.addChild(titleLabel)
 
-            let value = label("0", size: 14.5 * panelScale, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
+            let value = label("0", size: 16.5 * panelScale, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
             value.horizontalAlignmentMode = .left
             value.position = baseToStage(panelPoint(CGPoint(x: leftStatTextX, y: valueY)))
             gameOverOverlay.addChild(value)
@@ -1853,14 +2406,14 @@ final class GameScene: SKScene {
         ]
 
         for (key, title, point) in detailDefs {
-            let titleLabel = label(title, size: 7 * panelScale, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
+            let titleLabel = label(title, size: 11.4 * panelScale, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0))
             titleLabel.horizontalAlignmentMode = .left
             titleLabel.position = baseToStage(panelPoint(point))
             gameOverOverlay.addChild(titleLabel)
 
-            let value = label("0", size: (key == "time" ? 21 : 19) * panelScale, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
+            let value = label("0", size: (key == "time" ? 36 : 34) * panelScale, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
             value.horizontalAlignmentMode = .left
-            value.position = baseToStage(panelPoint(CGPoint(x: point.x, y: point.y + 24)))
+            value.position = baseToStage(panelPoint(CGPoint(x: point.x, y: point.y + 28)))
             gameOverOverlay.addChild(value)
             gameOverStatLabels[key] = value
         }
@@ -1882,8 +2435,11 @@ final class GameScene: SKScene {
         guard let bannerLabel else {
             return
         }
+        let titleBanner = mode == .title
         bannerLabel.removeAllActions()
         bannerLabel.text = text
+        bannerLabel.fontSize = titleBanner ? 15 : 24
+        bannerLabel.position = baseToStage(CGPoint(x: 640, y: titleBanner ? 706 : 196))
         bannerLabel.alpha = 0
         bannerLabel.setScale(0.96)
         bannerLabel.run(.sequence([
@@ -1901,6 +2457,7 @@ final class GameScene: SKScene {
         updateTitleBestRunLabel()
         titleGroup.isHidden = false
         pauseOverlay.isHidden = true
+        closePauseSubmenus()
         levelCompleteOverlay.isHidden = true
         upgradeOverlay.isHidden = true
         gameOverOverlay.isHidden = true
@@ -1944,6 +2501,7 @@ final class GameScene: SKScene {
         fireTouchIds.removeAll()
         titleGroup.isHidden = true
         pauseOverlay.isHidden = true
+        closePauseSubmenus()
         levelCompleteOverlay.isHidden = true
         upgradeOverlay.isHidden = true
         gameOverOverlay.isHidden = true
@@ -1981,6 +2539,7 @@ final class GameScene: SKScene {
         tiltVector = .zero
         loadLevel(level + 1, clearEntities: true)
         pauseOverlay.isHidden = true
+        closePauseSubmenus()
         levelCompleteOverlay.isHidden = true
         upgradeOverlay.isHidden = true
         gameOverOverlay.isHidden = true
@@ -2173,6 +2732,60 @@ final class GameScene: SKScene {
                 attackInterval: 2.7,
                 visualScale: 0.38
             )
+        case .rotavirus:
+            guard let rotavirusTexture else {
+                return nil
+            }
+            return BossProfile(
+                title: "Rotavirus Gyre",
+                kind: .rotavirus,
+                frames: AtlasFrames.rotavirus,
+                texture: rotavirusTexture,
+                radius: 78,
+                hp: 112,
+                score: 680,
+                damage: 24,
+                damageScale: 0.46,
+                targetX: 0.72,
+                attackInterval: 2.55,
+                visualScale: 0.47
+            )
+        case .lyssavirus:
+            guard let lyssavirusTexture else {
+                return nil
+            }
+            return BossProfile(
+                title: "Lyssavirus Lance",
+                kind: .lyssavirus,
+                frames: AtlasFrames.lyssavirus,
+                texture: lyssavirusTexture,
+                radius: 62,
+                hp: 110,
+                score: 640,
+                damage: 30,
+                damageScale: 0.47,
+                targetX: 0.78,
+                attackInterval: 3.45,
+                visualScale: 0.52
+            )
+        case .norovirus:
+            guard let norovirusTexture else {
+                return nil
+            }
+            return BossProfile(
+                title: "Norovirus Swarm-Core",
+                kind: .norovirus,
+                frames: AtlasFrames.norovirus,
+                texture: norovirusTexture,
+                radius: 76,
+                hp: 108,
+                score: 690,
+                damage: 22,
+                damageScale: 0.47,
+                targetX: 0.71,
+                attackInterval: 3.0,
+                visualScale: 0.48
+            )
         }
     }
 
@@ -2360,6 +2973,7 @@ final class GameScene: SKScene {
         if mode == .running {
             mode = .paused
             pauseOverlay.isHidden = false
+            closePauseSubmenus()
             restartConfirmVisible = false
             restartConfirmOverlay.isHidden = true
             joystickVector = .zero
@@ -2374,6 +2988,7 @@ final class GameScene: SKScene {
         } else {
             mode = .running
             pauseOverlay.isHidden = true
+            closePauseSubmenus()
             restartConfirmVisible = false
             restartConfirmOverlay.isHidden = true
             resetTiltCalibrationFeedback()
@@ -2439,10 +3054,17 @@ final class GameScene: SKScene {
         mode = .gameOver
         let finalRecord = currentRunRecord()
         lastRunWasBest = profileStore.recordRun(finalRecord)
+        gameCenter.submit(record: finalRecord)
+        if lastRunWasBest {
+            haptics.play(.success)
+        } else {
+            haptics.play(.warning)
+        }
         controlsNode.isHidden = true
         upgradeOverlay.isHidden = true
         levelCompleteOverlay.isHidden = true
         pauseOverlay.isHidden = true
+        closePauseSubmenus()
         clearScreenShake()
         restartConfirmVisible = false
         restartConfirmOverlay.isHidden = true
@@ -2906,7 +3528,7 @@ final class GameScene: SKScene {
             score = 15
             damage = 6
             reproductionCooldown = 0
-        case .boss:
+        case .bossDecoy, .boss:
             return nil
         }
 
@@ -2936,6 +3558,8 @@ final class GameScene: SKScene {
         for enemy in enemies where !enemy.dead {
             if enemy.kind == .boss {
                 updateBoss(enemy, delta: delta)
+            } else if enemy.kind == .bossDecoy {
+                updateNorovirusDecoy(enemy, delta: delta)
             } else {
                 let toPlayer = normalized(CGVector(dx: player.position.x - enemy.position.x, dy: player.position.y - enemy.position.y))
                 let desired = CGVector(dx: -enemy.baseSpeed, dy: toPlayer.dy * 86)
@@ -2963,7 +3587,7 @@ final class GameScene: SKScene {
         }
 
         enemies.removeAll { enemy in
-            if enemy.dead {
+            if enemy.dead && !enemy.deathAnimationActive {
                 enemy.node.removeFromParent()
                 return true
             }
@@ -2990,6 +3614,15 @@ final class GameScene: SKScene {
         case .filovirus:
             driftAmplitude = 112
             driftRate = 1.15
+        case .rotavirus:
+            driftAmplitude = 70
+            driftRate = 0.82
+        case .lyssavirus:
+            driftAmplitude = 86
+            driftRate = 1.02
+        case .norovirus:
+            driftAmplitude = 92
+            driftRate = 0.9
         }
 
         let drift = sin(CGFloat(runTime) * driftRate + CGFloat(enemy.id)) * driftAmplitude
@@ -3004,6 +3637,12 @@ final class GameScene: SKScene {
             updateAdenovirusBoss(enemy, profile: profile, delta: delta)
         case .filovirus:
             updateFilovirusBoss(enemy, profile: profile)
+        case .rotavirus:
+            updateRotavirusBoss(enemy, profile: profile, delta: delta)
+        case .lyssavirus:
+            updateLyssavirusBoss(enemy, profile: profile, delta: delta)
+        case .norovirus:
+            updateNorovirusBoss(enemy, profile: profile, delta: delta)
         }
     }
 
@@ -3068,9 +3707,433 @@ final class GameScene: SKScene {
         }
     }
 
+    private func updateRotavirusBoss(_ enemy: Enemy, profile: BossProfile, delta: TimeInterval) {
+        let healthRatio = clamp(enemy.hp / max(1, enemy.maxHP), 0, 1)
+        var nextPhase = 0
+        if healthRatio <= 0.22 {
+            nextPhase = 3
+        } else if healthRatio <= 0.48 {
+            nextPhase = 2
+        } else if healthRatio <= 0.70 {
+            nextPhase = 1
+        }
+
+        if nextPhase > enemy.phase {
+            enemy.phase = nextPhase
+            enemy.orbitDirection *= -1
+            audio.playSFX(.bossPhase)
+            showBanner(nextPhase == 3 ? "Rotavirus spin reversed" : "Rotavirus capsid tightened")
+        }
+
+        let cycleDuration = TimeInterval(max(2.25, 3.18 - CGFloat(enemy.phase) * 0.28))
+        enemy.shieldCycle += delta * TimeInterval(1 + CGFloat(enemy.phase) * 0.10)
+        while enemy.shieldCycle >= cycleDuration {
+            enemy.shieldCycle -= cycleDuration
+        }
+
+        let openStart = cycleDuration * (enemy.phase >= 2 ? 0.50 : 0.56)
+        let openEnd = cycleDuration * (enemy.phase >= 3 ? 0.78 : 0.86)
+        enemy.shieldOpen = enemy.shieldCycle >= openStart && enemy.shieldCycle <= openEnd
+
+        let spinDirection = enemy.orbitDirection == 0 ? 1 : enemy.orbitDirection
+        enemy.node.zRotation += CGFloat(delta) * spinDirection * (0.55 + CGFloat(enemy.phase) * 0.24)
+        enemy.node.color = UIColor(red: 0.68, green: 1.0, blue: 1.0, alpha: 1.0)
+        enemy.node.colorBlendFactor = enemy.shieldOpen ? 0.04 : 0.26
+
+        let frameIndex: Int
+        if enemy.attackCooldown <= 0.20 {
+            frameIndex = 4
+        } else if healthRatio <= 0.16 {
+            frameIndex = 6
+        } else if enemy.shieldOpen {
+            frameIndex = Int(floor(runTime * 2.0)).positiveModulo(3)
+        } else {
+            frameIndex = 3
+        }
+        setBossTexture(enemy, profile: profile, frameIndex: frameIndex)
+
+        if enemy.attackCooldown <= 0 {
+            let difficulty = difficultyMultiplier()
+            let pressure = 1 + CGFloat(enemy.phase) * 0.10
+            enemy.attackCooldown = (profile.attackInterval + TimeInterval.random(in: -0.18...0.34)) / TimeInterval(sqrt(difficulty) * pressure)
+            spawnRotavirusSpokePulse(from: enemy)
+            audio.playSFX(.bossPhase)
+        }
+    }
+
+    private func updateLyssavirusBoss(_ enemy: Enemy, profile: BossProfile, delta: TimeInterval) {
+        let desiredX = Constants.baseSize.width * profile.targetX
+        let healthRatio = clamp(enemy.hp / max(1, enemy.maxHP), 0, 1)
+        enemy.shieldOpen = enemy.phase == 3
+
+        switch enemy.phase {
+        case 0:
+            let trackY = clamp(player.position.y + sin(CGFloat(runTime) * 1.1 + CGFloat(enemy.id)) * 22, 105 + enemy.radius, Constants.baseSize.height - 95 - enemy.radius)
+            enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desiredX, amount: min(CGFloat(delta) * 1.5, 0.10))
+            enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: trackY, amount: min(CGFloat(delta) * 1.9, 0.12))
+            enemy.node.colorBlendFactor = 0
+            setBossTexture(enemy, profile: profile, frameIndex: Int(floor(runTime * 1.5)).positiveModulo(3))
+
+            if enemy.attackCooldown <= 0 {
+                enemy.phase = 1
+                enemy.bossComboStep = 0
+                enemy.bossTrailTimer = 0
+                enemy.bossActionTimer = healthRatio <= 0.32 ? 0.54 : 0.74
+                lockLyssavirusTarget(for: enemy, desiredX: desiredX)
+                showLyssavirusTelegraphLine(y: enemy.bossTargetY)
+                audio.playSFX(.bossWarning)
+                haptics.play(.warning)
+            }
+
+        case 1:
+            enemy.bossActionTimer = max(0, enemy.bossActionTimer - delta)
+            lockLyssavirusTarget(for: enemy, desiredX: desiredX)
+            enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desiredX, amount: min(CGFloat(delta) * 2.0, 0.16))
+            enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: enemy.bossTargetY, amount: min(CGFloat(delta) * 2.6, 0.20))
+            let pulse = 0.36 + 0.18 * sin(CGFloat(runTime) * 22)
+            enemy.node.color = UIColor(red: 0.40, green: 1.0, blue: 0.94, alpha: 1.0)
+            enemy.node.colorBlendFactor = pulse
+            setBossTexture(enemy, profile: profile, frameIndex: 3)
+
+            if enemy.bossActionTimer == 0 {
+                enemy.phase = 2
+                enemy.bossActionTimer = healthRatio <= 0.45 ? 0.86 : 0.78
+                enemy.orbitDirection = CGFloat.random(in: 0...1) < 0.5 ? -1 : 1
+                setLyssavirusChargeVector(for: enemy)
+                showLyssavirusTelegraphLine(y: enemy.bossTargetY)
+                setBossTexture(enemy, profile: profile, frameIndex: 4)
+                audio.playSFX(.bossPhase)
+            }
+
+        case 2:
+            enemy.bossActionTimer = max(0, enemy.bossActionTimer - delta)
+            let difficulty = difficultyMultiplier()
+            let chargeSpeed = (healthRatio <= 0.32 ? CGFloat(920) : CGFloat(820)) * (1 + max(0, difficulty - 1) * 0.12)
+            steerLyssavirusChargeTowardPlayer(for: enemy, desiredX: desiredX, delta: delta, turnRate: healthRatio <= 0.32 ? 4.2 : 3.1)
+            enemy.position.x += enemy.velocity.dx * chargeSpeed * CGFloat(delta)
+            enemy.position.y += enemy.velocity.dy * chargeSpeed * CGFloat(delta)
+            enemy.position.y = clamp(enemy.position.y, 105 + enemy.radius, Constants.baseSize.height - 95 - enemy.radius)
+            enemy.node.color = UIColor(red: 0.55, green: 1.0, blue: 0.94, alpha: 1.0)
+            enemy.node.colorBlendFactor = 0.34
+            setBossTexture(enemy, profile: profile, frameIndex: 4)
+            if healthRatio <= 0.55 {
+                enemy.bossTrailTimer = max(0, enemy.bossTrailTimer - delta)
+                if enemy.bossTrailTimer == 0 {
+                    spawnLyssavirusTrailHazard(from: enemy, intensity: healthRatio <= 0.28 ? 1.22 : 1.0)
+                    enemy.bossTrailTimer = healthRatio <= 0.28 ? 0.13 : 0.18
+                }
+            }
+
+            let targetPoint = CGPoint(x: enemy.bossTargetX, y: enemy.bossTargetY)
+            if enemy.position.x <= visibleBaseMinX() + 185 || enemy.bossActionTimer == 0 || distance(enemy.position, targetPoint) < 34 {
+                enemy.phase = 3
+                enemy.bossActionTimer = healthRatio <= 0.25 ? 0.58 : 0.74
+                enemy.attackCooldown = profile.attackInterval / TimeInterval(sqrt(difficulty))
+                setBossTexture(enemy, profile: profile, frameIndex: 5)
+                showBanner("Lyssavirus exposed")
+            }
+
+        case 3:
+            enemy.bossActionTimer = max(0, enemy.bossActionTimer - delta)
+            let recoverY = clamp(Constants.baseSize.height * 0.5 + sin(CGFloat(runTime) * 1.4 + CGFloat(enemy.id)) * 58, 105 + enemy.radius, Constants.baseSize.height - 95 - enemy.radius)
+            let returnSpeed: CGFloat = healthRatio <= 0.55 ? 2.45 : 1.85
+            enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desiredX, amount: min(CGFloat(delta) * returnSpeed, healthRatio <= 0.55 ? 0.18 : 0.13))
+            enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: recoverY, amount: min(CGFloat(delta) * 1.7, 0.12))
+            enemy.node.color = UIColor(red: 0.70, green: 1.0, blue: 0.92, alpha: 1.0)
+            enemy.node.colorBlendFactor = 0.18
+            setBossTexture(enemy, profile: profile, frameIndex: healthRatio <= 0.22 ? 6 : 5)
+            if healthRatio <= 0.55 {
+                enemy.bossTrailTimer = max(0, enemy.bossTrailTimer - delta)
+                if enemy.bossTrailTimer == 0 {
+                    spawnLyssavirusTrailHazard(from: enemy, intensity: healthRatio <= 0.28 ? 1.16 : 0.92)
+                    enemy.bossTrailTimer = 0.22
+                }
+            }
+
+            if enemy.bossActionTimer == 0 {
+                if healthRatio <= 0.36 && enemy.bossComboStep == 0 {
+                    enemy.phase = 4
+                    enemy.bossComboStep = 1
+                    enemy.bossActionTimer = 0.42
+                    lockLyssavirusTarget(for: enemy, desiredX: desiredX)
+                    showLyssavirusTelegraphLine(y: enemy.bossTargetY)
+                    audio.playSFX(.bossWarning)
+                } else {
+                    enemy.phase = 0
+                    enemy.node.colorBlendFactor = 0
+                    enemy.attackCooldown = max(enemy.attackCooldown, 0.42)
+                }
+            }
+
+        case 4:
+            enemy.bossActionTimer = max(0, enemy.bossActionTimer - delta)
+            lockLyssavirusTarget(for: enemy, desiredX: desiredX)
+            enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desiredX, amount: min(CGFloat(delta) * 2.5, 0.22))
+            enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: enemy.bossTargetY, amount: min(CGFloat(delta) * 4.0, 0.34))
+            let pulse = 0.48 + 0.20 * sin(CGFloat(runTime) * 28)
+            enemy.node.color = UIColor(red: 0.45, green: 1.0, blue: 0.92, alpha: 1.0)
+            enemy.node.colorBlendFactor = pulse
+            setBossTexture(enemy, profile: profile, frameIndex: 3)
+
+            if enemy.bossActionTimer == 0 {
+                enemy.phase = 5
+                enemy.bossActionTimer = 0.38
+                enemy.bossTrailTimer = 0
+                setLyssavirusChargeVector(for: enemy)
+                showLyssavirusTelegraphLine(y: enemy.bossTargetY)
+                setBossTexture(enemy, profile: profile, frameIndex: 4)
+                audio.playSFX(.bossPhase)
+            }
+
+        case 5:
+            enemy.bossActionTimer = max(0, enemy.bossActionTimer - delta)
+            let difficulty = difficultyMultiplier()
+            let chargeSpeed = CGFloat(980) * (1 + max(0, difficulty - 1) * 0.12)
+            steerLyssavirusChargeTowardPlayer(for: enemy, desiredX: desiredX, delta: delta, turnRate: 5.0)
+            enemy.position.x += enemy.velocity.dx * chargeSpeed * CGFloat(delta)
+            enemy.position.y += enemy.velocity.dy * chargeSpeed * CGFloat(delta)
+            enemy.position.y = clamp(enemy.position.y, 105 + enemy.radius, Constants.baseSize.height - 95 - enemy.radius)
+            enemy.node.color = UIColor(red: 0.50, green: 1.0, blue: 0.92, alpha: 1.0)
+            enemy.node.colorBlendFactor = 0.40
+            setBossTexture(enemy, profile: profile, frameIndex: 4)
+            enemy.bossTrailTimer = max(0, enemy.bossTrailTimer - delta)
+            if enemy.bossTrailTimer == 0 {
+                spawnLyssavirusTrailHazard(from: enemy, intensity: 1.28)
+                enemy.bossTrailTimer = 0.11
+            }
+
+            let targetPoint = CGPoint(x: enemy.bossTargetX, y: enemy.bossTargetY)
+            if enemy.position.x <= visibleBaseMinX() + 360 || enemy.bossActionTimer == 0 || distance(enemy.position, targetPoint) < 34 {
+                enemy.phase = 3
+                enemy.bossActionTimer = 0.40
+                enemy.attackCooldown = profile.attackInterval * 0.84 / TimeInterval(sqrt(difficulty))
+                setBossTexture(enemy, profile: profile, frameIndex: 5)
+                showBanner("Lyssavirus exposed")
+            }
+
+        default:
+            enemy.phase = 0
+            enemy.node.colorBlendFactor = 0
+            enemy.attackCooldown = max(enemy.attackCooldown, 0.42)
+        }
+    }
+
+    private func lockLyssavirusTarget(for enemy: Enemy, desiredX: CGFloat) {
+        let minimumX = visibleBaseMinX() + 110
+        let maximumX = max(minimumX + 80, desiredX - 150)
+        enemy.bossTargetX = clamp(player.position.x, minimumX, maximumX)
+        enemy.bossTargetY = clamp(player.position.y, 116 + enemy.radius, Constants.baseSize.height - 112 - enemy.radius)
+    }
+
+    private func setLyssavirusChargeVector(for enemy: Enemy) {
+        let targetPoint = CGPoint(x: enemy.bossTargetX, y: enemy.bossTargetY)
+        var aim = normalized(CGVector(dx: targetPoint.x - enemy.position.x, dy: targetPoint.y - enemy.position.y))
+        if vectorLength(aim) <= 0.001 {
+            aim = CGVector(dx: -1, dy: 0)
+        }
+        enemy.velocity = aim
+    }
+
+    private func steerLyssavirusChargeTowardPlayer(for enemy: Enemy, desiredX: CGFloat, delta: TimeInterval, turnRate: CGFloat) {
+        let minimumX = visibleBaseMinX() + 110
+        let maximumX = max(minimumX + 80, desiredX - 150)
+        enemy.bossTargetX = clamp(player.position.x, minimumX, maximumX)
+        enemy.bossTargetY = clamp(player.position.y, 116 + enemy.radius, Constants.baseSize.height - 112 - enemy.radius)
+        let targetPoint = CGPoint(x: enemy.bossTargetX, y: enemy.bossTargetY)
+        let desiredAim = normalized(CGVector(dx: targetPoint.x - enemy.position.x, dy: targetPoint.y - enemy.position.y))
+        guard vectorLength(desiredAim) > 0.001 else { return }
+
+        let amount = min(CGFloat(delta) * turnRate, 0.14)
+        let blended = normalized(CGVector(
+            dx: enemy.velocity.dx + (desiredAim.dx - enemy.velocity.dx) * amount,
+            dy: enemy.velocity.dy + (desiredAim.dy - enemy.velocity.dy) * amount
+        ))
+        if vectorLength(blended) > 0.001 {
+            enemy.velocity = blended
+        }
+    }
+
+    private func updateNorovirusBoss(_ enemy: Enemy, profile: BossProfile, delta: TimeInterval) {
+        let healthRatio = clamp(enemy.hp / max(1, enemy.maxHP), 0, 1)
+        var nextPhase = 0
+        if healthRatio <= 0.24 {
+            nextPhase = 3
+        } else if healthRatio <= 0.50 {
+            nextPhase = 2
+        } else if healthRatio <= 0.72 {
+            nextPhase = 1
+        }
+
+        if nextPhase > enemy.phase {
+            enemy.phase = nextPhase
+            audio.playSFX(.bossPhase)
+            showBanner(nextPhase == 3 ? "Norovirus decoys surged" : "Norovirus orbs multiplied")
+        }
+
+        let decoyCount = activeNorovirusDecoyCount()
+        enemy.shieldOpen = decoyCount == 0
+        enemy.node.color = UIColor(red: 0.82, green: 0.72, blue: 1.0, alpha: 1.0)
+        enemy.node.colorBlendFactor = decoyCount > 0 ? 0.16 : 0
+        let pulseFrame = decoyCount > 0 ? 3 + Int(floor(runTime * 2.0)).positiveModulo(2) : Int(floor(runTime * 1.35)).positiveModulo(3)
+        setBossTexture(enemy, profile: profile, frameIndex: pulseFrame)
+
+        if enemy.attackCooldown <= 0 && decoyCount < Constants.maxNorovirusDecoys {
+            let difficulty = difficultyMultiplier()
+            let requested = min(Constants.maxNorovirusDecoys, 4 + enemy.phase)
+            spawnNorovirusDecoys(from: enemy, requestedCount: requested - decoyCount)
+            let pressureScale = healthRatio <= 0.26 ? 1.22 : (healthRatio <= 0.52 ? 1.12 : 1.0)
+            enemy.attackCooldown = (profile.attackInterval + TimeInterval.random(in: -0.32...0.26)) / TimeInterval(sqrt(difficulty) * pressureScale)
+            audio.playSFX(.bossPhase)
+        }
+    }
+
+    private func updateNorovirusDecoy(_ enemy: Enemy, delta: TimeInterval) {
+        guard let boss = activeBoss(), boss.bossKind == .norovirus, !boss.dead else {
+            enemy.dead = true
+            return
+        }
+
+        if enemy.bossActionTimer > 0 {
+            enemy.bossActionTimer = max(0, enemy.bossActionTimer - delta)
+            enemy.orbitAngle += CGFloat(delta) * enemy.orbitDirection * (2.0 + CGFloat(boss.phase) * 0.22)
+            let radius = enemy.orbitRadius + sin(CGFloat(runTime) * 2.8 + CGFloat(enemy.id)) * 7
+            let desired = CGPoint(
+                x: boss.position.x + cos(enemy.orbitAngle) * radius,
+                y: clamp(boss.position.y + sin(enemy.orbitAngle) * radius * 0.72, 110 + enemy.radius, Constants.baseSize.height - 100 - enemy.radius)
+            )
+            enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desired.x, amount: min(CGFloat(delta) * 7.0, 1))
+            enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: desired.y, amount: min(CGFloat(delta) * 7.0, 1))
+
+            if enemy.bossActionTimer == 0 {
+                enemy.phase = 1
+                let difficulty = difficultyMultiplier()
+                let driftSpeed = (CGFloat.random(in: 142...192) + CGFloat(boss.phase) * 22) * (1 + max(0, difficulty - 1) * 0.10)
+                enemy.bossTargetX = player.position.x
+                enemy.bossTargetY = player.position.y
+                var aim = normalized(CGVector(dx: enemy.bossTargetX - enemy.position.x, dy: enemy.bossTargetY - enemy.position.y))
+                if vectorLength(aim) <= 0.001 {
+                    aim = CGVector(dx: -1, dy: 0)
+                }
+                enemy.velocity = CGVector(dx: aim.dx * driftSpeed, dy: aim.dy * driftSpeed)
+                enemy.bossTrailTimer = 0
+            }
+        } else {
+            enemy.position.x += enemy.velocity.dx * CGFloat(delta)
+            enemy.position.y += enemy.velocity.dy * CGFloat(delta)
+            enemy.position.y = clamp(enemy.position.y, 90 + enemy.radius, Constants.baseSize.height - 85 - enemy.radius)
+            enemy.bossTrailTimer = max(0, enemy.bossTrailTimer - delta)
+            if enemy.bossTrailTimer == 0 {
+                spawnSpark(at: enemy.position, color: UIColor(red: 0.58, green: 0.95, blue: 1.0, alpha: 1.0), count: 2)
+                enemy.bossTrailTimer = 0.13
+            }
+        }
+
+        enemy.node.alpha = enemy.bossActionTimer > 0 ? 0.96 : 0.88
+        enemy.node.setScale(enemy.bossActionTimer > 0 ? 1.0 : 0.92)
+    }
+
     private func setBossTexture(_ enemy: Enemy, profile: BossProfile, frameIndex: Int) {
         let frame = profile.frames[frameIndex.clamped(to: 0...(profile.frames.count - 1))]
         enemy.node.texture = regionTexture(from: profile.texture, frame: frame)
+    }
+
+    private func beginBossDeathAnimation(_ enemy: Enemy) {
+        guard let bossKind = enemy.bossKind, let profile = bossProfile(for: bossKind) else {
+            spawnSpark(at: enemy.position, color: UIColor(red: 0.5, green: 1.0, blue: 0.88, alpha: 1.0), count: 18)
+            return
+        }
+
+        let color = bossDeathBurstColor(for: bossKind)
+        let position = enemy.position
+        let radius = enemy.radius
+        let secondaryBursts = [
+            CGPoint(x: position.x - radius * 0.34, y: clamp(position.y - radius * 0.24, 95 + radius * 0.25, Constants.baseSize.height - 90 - radius * 0.25)),
+            CGPoint(x: position.x + radius * 0.24, y: clamp(position.y + radius * 0.28, 95 + radius * 0.25, Constants.baseSize.height - 90 - radius * 0.25)),
+            CGPoint(x: position.x - radius * 0.06, y: clamp(position.y + radius * 0.04, 95 + radius * 0.25, Constants.baseSize.height - 90 - radius * 0.25))
+        ]
+
+        enemy.deathAnimationActive = true
+        enemy.node.removeAllActions()
+        enemy.node.zPosition = ZLayer.entity + 7
+        enemy.node.alpha = 1
+        enemy.node.setScale(1)
+        enemy.node.color = UIColor.white
+        enemy.node.colorBlendFactor = 0
+        setBossTexture(enemy, profile: profile, frameIndex: profile.frames.count - 1)
+
+        spawnBossDeathBurst(at: position, color: color, count: 16, shockwaveRadius: radius * 1.25)
+        enemy.node.run(.sequence([
+            .group([
+                .scale(to: 1.08, duration: 0.16),
+                .colorize(with: color, colorBlendFactor: 0.42, duration: 0.16),
+                .rotate(byAngle: bossKind == .filovirus ? 0.18 : -0.12, duration: 0.16)
+            ]),
+            .wait(forDuration: 0.12),
+            .run { [weak self] in
+                self?.spawnBossDeathBurst(at: secondaryBursts[0], color: color, count: 12, shockwaveRadius: radius * 0.72)
+            },
+            .wait(forDuration: 0.16),
+            .run { [weak self] in
+                self?.spawnBossDeathBurst(at: secondaryBursts[1], color: color, count: 12, shockwaveRadius: radius * 0.82)
+                self?.addScreenShake(duration: 0.18, magnitude: 10)
+            },
+            .wait(forDuration: 0.12),
+            .run { [weak self] in
+                self?.spawnBossDeathBurst(at: secondaryBursts[2], color: UIColor.white, count: 8, shockwaveRadius: radius * 0.55)
+            },
+            .group([
+                .fadeOut(withDuration: 0.34),
+                .scale(to: 0.18, duration: 0.34),
+                .rotate(byAngle: bossKind == .filovirus ? -0.32 : 0.28, duration: 0.34)
+            ]),
+            .run { [weak enemy] in
+                enemy?.deathAnimationActive = false
+                enemy?.node.removeFromParent()
+            }
+        ]))
+    }
+
+    private func bossDeathBurstColor(for bossKind: BossKind) -> UIColor {
+        switch bossKind {
+        case .pox:
+            return UIColor(red: 0.94, green: 0.68, blue: 0.28, alpha: 1.0)
+        case .adenovirus, .rotavirus:
+            return UIColor(red: 0.38, green: 1.0, blue: 0.94, alpha: 1.0)
+        case .filovirus:
+            return UIColor(red: 0.72, green: 1.0, blue: 0.48, alpha: 1.0)
+        case .lyssavirus:
+            return UIColor(red: 0.42, green: 1.0, blue: 0.92, alpha: 1.0)
+        case .norovirus:
+            return UIColor(red: 0.86, green: 0.36, blue: 1.0, alpha: 1.0)
+        }
+    }
+
+    private func spawnBossDeathBurst(at basePosition: CGPoint, color: UIColor, count: Int, shockwaveRadius: CGFloat) {
+        spawnBossDeathShockwave(at: basePosition, color: color, radius: shockwaveRadius)
+        spawnSpark(at: basePosition, color: color, count: count)
+    }
+
+    private func spawnBossDeathShockwave(at basePosition: CGPoint, color: UIColor, radius: CGFloat) {
+        guard reserveCosmeticNode() else {
+            return
+        }
+
+        let ring = SKShapeNode(circleOfRadius: max(14, radius * 0.38))
+        ring.position = baseToStage(basePosition)
+        ring.strokeColor = color.withAlphaComponent(0.78)
+        ring.fillColor = .clear
+        ring.lineWidth = 5
+        ring.glowWidth = 10
+        ring.alpha = 0.95
+        ring.zPosition = ZLayer.particles + 6
+        particleNode.addChild(ring)
+        ring.run(.sequence([
+            .group([
+                .scale(to: 2.25, duration: 0.38),
+                .fadeOut(withDuration: 0.38)
+            ]),
+            .removeFromParent()
+        ]))
     }
 
     private func spawnBossAdd(from boss: Enemy, kind: EnemyKind, angle: CGFloat, speed: CGFloat) {
@@ -3094,6 +4157,153 @@ final class GameScene: SKScene {
             position: position,
             velocity: CGVector(dx: -CGFloat.random(in: 150...205), dy: CGFloat(direction) * CGFloat.random(in: 36...72))
         )
+    }
+
+    private func spawnRotavirusSpokePulse(from boss: Enemy) {
+        let availableSlots = max(0, Constants.maxActiveEnemies + 7 - liveEnemyCount())
+        guard availableSlots > 0 else {
+            return
+        }
+
+        let count = min(availableSlots, min(5, 3 + boss.phase))
+        let baseAngle = CGFloat(boss.shieldCycle) * 2.35 * (boss.orbitDirection == 0 ? 1 : boss.orbitDirection)
+        let difficulty = difficultyMultiplier()
+        for index in 0..<count {
+            let angle = baseAngle + CGFloat(index) * (CGFloat.pi * 2 / CGFloat(count))
+            let spawnPosition = CGPoint(
+                x: boss.position.x - boss.radius * 0.35 + cos(angle) * boss.radius * 0.20,
+                y: clamp(boss.position.y + sin(angle) * boss.radius * 0.86, 115, Constants.baseSize.height - 105)
+            )
+            let speed = (CGFloat.random(in: 116...150) + CGFloat(boss.phase) * 14) * (1 + max(0, difficulty - 1) * 0.10)
+            let velocity = CGVector(dx: -speed, dy: sin(angle) * CGFloat.random(in: 58...104))
+            spawnEnemy(kind: .fragment, position: spawnPosition, velocity: velocity)
+        }
+        spawnSpark(at: boss.position, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0), count: 5)
+    }
+
+    private func showLyssavirusTelegraphLine(y targetY: CGFloat) {
+        guard reserveCosmeticNode() else {
+            return
+        }
+
+        let start = baseToStage(CGPoint(x: visibleBaseMinX() + 72, y: targetY))
+        let end = baseToStage(CGPoint(x: visibleBaseMaxX() + 44, y: targetY))
+        let path = CGMutablePath()
+        path.move(to: start)
+        path.addLine(to: end)
+
+        let line = SKShapeNode(path: path)
+        line.strokeColor = UIColor(red: 0.38, green: 1.0, blue: 0.92, alpha: 0.95)
+        line.lineWidth = 8
+        line.glowWidth = 14
+        line.alpha = 0.95
+        line.zPosition = ZLayer.particles + 8
+        particleNode.addChild(line)
+        line.run(.sequence([
+            .group([
+                .fadeOut(withDuration: 0.78),
+                .scaleY(to: 1.28, duration: 0.78)
+            ]),
+            .removeFromParent()
+        ]))
+    }
+
+    private func spawnLyssavirusTrailHazard(from boss: Enemy, intensity: CGFloat) {
+        guard liveEnemyCount() < Constants.maxActiveEnemies + 8 else {
+            return
+        }
+
+        let position = CGPoint(
+            x: boss.position.x + boss.radius * CGFloat.random(in: 0.10...0.48),
+            y: clamp(boss.position.y + CGFloat.random(in: -22...22), 112, Constants.baseSize.height - 104)
+        )
+        let speed = CGFloat.random(in: 112...154) * intensity
+        spawnEnemy(
+            kind: .fragment,
+            position: position,
+            velocity: CGVector(dx: -speed, dy: CGFloat.random(in: -48...48) * intensity)
+        )
+        if let hazard = enemies.last, hazard.kind == .fragment {
+            hazard.damage = 5
+            hazard.score = 8
+            hazard.node.alpha = 0.82
+            hazard.node.color = UIColor(red: 0.40, green: 1.0, blue: 0.90, alpha: 1.0)
+            hazard.node.colorBlendFactor = 0.34
+            spawnSpark(at: position, color: UIColor(red: 0.40, green: 1.0, blue: 0.90, alpha: 1.0), count: 2)
+        }
+    }
+
+    private func activeNorovirusDecoyCount() -> Int {
+        enemies.reduce(0) { count, enemy in
+            count + (!enemy.dead && enemy.kind == .bossDecoy && enemy.bossKind == .norovirus ? 1 : 0)
+        }
+    }
+
+    private func spawnNorovirusDecoys(from boss: Enemy, requestedCount: Int) {
+        guard requestedCount > 0,
+              let norovirusTexture else {
+            return
+        }
+
+        let availableDecoys = max(0, Constants.maxNorovirusDecoys - activeNorovirusDecoyCount())
+        let availableEnemySlots = max(0, Constants.maxActiveEnemies + 8 - liveEnemyCount())
+        let count = min(requestedCount, availableDecoys, availableEnemySlots)
+        guard count > 0 else {
+            return
+        }
+
+        let frame = AtlasFrames.norovirusDecoyOrb
+        let texture = regionTexture(from: norovirusTexture, frame: frame)
+        let difficulty = difficultyMultiplier()
+        for index in 0..<count {
+            let angle = CGFloat(index) * (CGFloat.pi * 2 / CGFloat(count)) + CGFloat.random(in: -0.28...0.28) + CGFloat(runTime)
+            let orbitRadius = CGFloat.random(in: 76...108) + CGFloat(boss.phase) * 7
+            let position = CGPoint(
+                x: boss.position.x + cos(angle) * orbitRadius,
+                y: clamp(boss.position.y + sin(angle) * orbitRadius * 0.72, 112, Constants.baseSize.height - 104)
+            )
+            let node = SKSpriteNode(texture: texture)
+            node.size = CGSize(width: frame.rect.width * 0.52, height: frame.rect.height * 0.52)
+            node.position = baseToStage(position)
+            node.zPosition = ZLayer.entity + 4
+            entityNode.addChild(node)
+
+            let decoy = Enemy(
+                id: nextEnemyId,
+                kind: .bossDecoy,
+                node: node,
+                position: position,
+                velocity: .zero,
+                baseSpeed: 104,
+                radius: 17,
+                hp: 1.15 + max(0, difficulty - 1) * 0.28,
+                score: 18,
+                damage: 8,
+                bossKind: .norovirus,
+                damageScale: 1,
+                attackCooldown: 0,
+                shieldCycle: 0
+            )
+            let orbitTime = CGFloat.random(in: 0.72...1.10) - CGFloat(boss.phase) * 0.08
+            decoy.bossActionTimer = TimeInterval(max(0.46, orbitTime))
+            decoy.orbitAngle = angle
+            decoy.orbitRadius = orbitRadius
+            decoy.orbitDirection = index.isMultiple(of: 2) ? 1 : -1
+            nextEnemyId += 1
+            enemies.append(decoy)
+        }
+        spawnSpark(at: boss.position, color: UIColor(red: 0.86, green: 0.36, blue: 1.0, alpha: 1.0), count: 5)
+    }
+
+    private func clearBossDecoys(for bossKind: BossKind?) {
+        guard bossKind == .norovirus else {
+            return
+        }
+
+        for decoy in enemies where decoy.kind == .bossDecoy && decoy.bossKind == .norovirus && !decoy.dead {
+            decoy.dead = true
+            spawnSpark(at: decoy.position, color: UIColor(red: 0.86, green: 0.36, blue: 1.0, alpha: 1.0), count: 4)
+        }
     }
 
     private func checkInfluenzaReplication(for enemy: Enemy) -> [(position: CGPoint, velocity: CGVector)] {
@@ -3256,7 +4466,22 @@ final class GameScene: SKScene {
             return
         }
 
-        let appliedDamage = enemy.kind == .boss && !ignoreBossDamageScale ? amount * enemy.damageScale : amount
+        var bossDamageScale = enemy.damageScale
+        if enemy.kind == .boss, !ignoreBossDamageScale {
+            if enemy.bossKind == .rotavirus, !enemy.shieldOpen {
+                bossDamageScale *= 0.34
+                enemy.node.run(.sequence([
+                    .colorize(with: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0), colorBlendFactor: 0.56, duration: 0.04),
+                    .colorize(withColorBlendFactor: 0.26, duration: 0.10)
+                ]))
+            } else if enemy.bossKind == .lyssavirus, enemy.phase == 3 {
+                bossDamageScale *= 1.38
+            } else if enemy.bossKind == .norovirus, activeNorovirusDecoyCount() > 0 {
+                bossDamageScale *= 0.58
+            }
+        }
+
+        let appliedDamage = enemy.kind == .boss && !ignoreBossDamageScale ? amount * bossDamageScale : amount
         enemy.hp -= appliedDamage
         let canPlayHitFeedback = enemy.kind != .boss || bossHitFeedbackTimer <= 0
         let canShowHitFeedback = canPlayHitFeedback && reserveHitFlash(for: enemy)
@@ -3285,8 +4510,14 @@ final class GameScene: SKScene {
             if enemy.kind == .boss {
                 bossDefeated = true
                 bossesNeutralized += 1
-                finishLevel(delay: 1.15)
+                clearBossDecoys(for: enemy.bossKind)
+                beginBossDeathAnimation(enemy)
+                haptics.play(.heavyImpact)
+                finishLevel(delay: 1.45)
                 showBanner("\(activeMission.bossTarget ?? "Boss") neutralized")
+                addScreenShake(duration: 0.34, magnitude: 18)
+                audio.playSFX(.bossDefeated)
+                return
             } else {
                 levelKills += 1
                 totalKills += 1
@@ -3427,6 +4658,7 @@ final class GameScene: SKScene {
         audio.stopMusic()
         audio.stopAmbience()
         audio.playSFX(.levelComplete)
+        haptics.play(.success)
         levelClearTimer = delay
     }
 
@@ -3434,6 +4666,7 @@ final class GameScene: SKScene {
         mode = .levelComplete
         controlsNode.isHidden = true
         pauseOverlay.isHidden = true
+        closePauseSubmenus()
         restartConfirmVisible = false
         restartConfirmOverlay.isHidden = true
         upgradeOverlay.isHidden = true
@@ -3478,6 +4711,7 @@ final class GameScene: SKScene {
             dashRank = min(Constants.maxUpgradeRank, dashRank + 1)
         }
         audio.playSFX(.upgradeSelected)
+        haptics.play(.success)
         startNextLevel()
     }
 
@@ -3508,19 +4742,33 @@ final class GameScene: SKScene {
         for definition in Constants.upgrades {
             let rank = rank(for: definition.choice)
             let maxed = rank >= Constants.maxUpgradeRank
-            if maxed {
-                upgradeRankLabels[definition.choice]?.text = "Fully adapted"
-            } else {
-                let rankPrefix = rank == 0 ? "New adaptation" : "Current rank \(rank)"
-                upgradeRankLabels[definition.choice]?.text = "\(rankPrefix)\n\(definition.ranks[rank])"
-            }
-            upgradeButtonLabels[definition.choice]?.text = maxed ? "Maxed" : "Choose"
+            upgradeRankLabels[definition.choice]?.text = upgradeCurrentText(for: definition, rank: rank)
+            upgradeNextRankLabels[definition.choice]?.text = upgradeNextText(for: definition, rank: rank)
+            upgradeButtonLabels[definition.choice]?.text = maxed ? "Maxed" : "Choose Rank \(rank + 1)"
             upgradeButtonLabels[definition.choice]?.alpha = maxed ? 0.58 : 1.0
 
             for (index, pip) in (upgradePips[definition.choice] ?? []).enumerated() {
                 styleUpgradePip(pip, filled: index < rank)
             }
         }
+    }
+
+    private func upgradeCurrentText(for definition: UpgradeDefinition, rank: Int) -> String {
+        guard rank > 0 else {
+            return "Current: no adaptation yet"
+        }
+
+        let currentIndex = min(rank - 1, definition.ranks.count - 1)
+        return "Current: Rank \(rank) - \(definition.ranks[currentIndex].current)"
+    }
+
+    private func upgradeNextText(for definition: UpgradeDefinition, rank: Int) -> String {
+        guard rank < Constants.maxUpgradeRank else {
+            return "Next: all 4 ranks unlocked"
+        }
+
+        let nextIndex = min(rank, definition.ranks.count - 1)
+        return "Next: Rank \(rank + 1) - \(definition.ranks[nextIndex].next)"
     }
 
     private func updateUpgradePipPulse() {
@@ -3635,11 +4883,100 @@ final class GameScene: SKScene {
     private func applySavedProfileSettings() {
         musicMuted = profileStore.musicMuted
         sfxMuted = profileStore.sfxMuted
+        hapticsMuted = profileStore.hapticsMuted
+        tiltSensitivity = profileStore.tiltSensitivity
         audio.setMusicMuted(musicMuted)
         audio.setSFXMuted(sfxMuted)
+        haptics.setMuted(hapticsMuted)
         setTiltEnabled(profileStore.tiltEnabled, showBannerText: false)
         updatePauseToggleLabels()
         updateTitleBestRunLabel()
+        updateTiltSensitivitySlider()
+    }
+
+    private func configureGameCenter() {
+        gameCenter.onAuthenticationChanged = { [weak self] isAuthenticated in
+            DispatchQueue.main.async {
+                self?.leaderboardsLabel?.text = isAuthenticated ? "LEADERBOARDS" : "GAME CENTER"
+            }
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else {
+                return
+            }
+            self.gameCenter.authenticate(presentingViewController: self.presentingViewController()) { [weak self] in
+                guard let self, self.profileStore.hasBestRun else {
+                    return nil
+                }
+                return self.profileStore.bestRun
+            }
+        }
+    }
+
+    private func presentingViewController() -> UIViewController? {
+        guard let view else {
+            return nil
+        }
+        return view.window?.rootViewController ?? view.next as? UIViewController
+    }
+
+    private func playUITap() {
+        audio.playSFX(.uiSelect)
+        haptics.play(.selection)
+    }
+
+    private func openInputSettings() {
+        closeAudioSettings()
+        closeHowToPlay()
+        inputSettingsVisible = true
+        restartConfirmVisible = false
+        restartConfirmOverlay.isHidden = true
+        inputSettingsOverlay.isHidden = false
+        resetTiltCalibrationFeedback()
+        updatePauseToggleLabels()
+        updateTiltSensitivitySlider()
+    }
+
+    private func closeInputSettings() {
+        inputSettingsVisible = false
+        tiltSensitivityTouchId = nil
+        inputSettingsOverlay.isHidden = true
+        resetTiltCalibrationFeedback()
+    }
+
+    private func openAudioSettings() {
+        closeInputSettings()
+        closeHowToPlay()
+        audioSettingsVisible = true
+        restartConfirmVisible = false
+        restartConfirmOverlay.isHidden = true
+        audioSettingsOverlay.isHidden = false
+        updatePauseToggleLabels()
+    }
+
+    private func closeAudioSettings() {
+        audioSettingsVisible = false
+        audioSettingsOverlay.isHidden = true
+    }
+
+    private func openHowToPlay() {
+        closeAudioSettings()
+        closeInputSettings()
+        howToPlayVisible = true
+        restartConfirmVisible = false
+        restartConfirmOverlay.isHidden = true
+        howToPlayOverlay.isHidden = false
+    }
+
+    private func closeHowToPlay() {
+        howToPlayVisible = false
+        howToPlayOverlay.isHidden = true
+    }
+
+    private func closePauseSubmenus() {
+        closeAudioSettings()
+        closeInputSettings()
+        closeHowToPlay()
     }
 
     private func startMotionInputIfNeeded() {
@@ -3698,8 +5035,8 @@ final class GameScene: SKScene {
         }
 
         var move = CGVector(
-            dx: (sensor.dx - tiltNeutral.dx) * Constants.tiltSensitivity,
-            dy: (sensor.dy - tiltNeutral.dy) * Constants.tiltSensitivity
+            dx: (sensor.dx - tiltNeutral.dx) * tiltSensitivity,
+            dy: (sensor.dy - tiltNeutral.dy) * tiltSensitivity
         )
         if abs(move.dx) < Constants.tiltDeadzone {
             move.dx = 0
@@ -3839,6 +5176,59 @@ final class GameScene: SKScene {
         updatePauseToggleLabels()
     }
 
+    private func setHapticsMuted(_ value: Bool) {
+        hapticsMuted = value
+        profileStore.hapticsMuted = value
+        haptics.setMuted(value)
+        updatePauseToggleLabels()
+    }
+
+    private func setTiltSensitivity(_ value: CGFloat) {
+        tiltSensitivity = clamp(value, Constants.tiltSensitivityMin, Constants.tiltSensitivityMax)
+        profileStore.tiltSensitivity = tiltSensitivity
+        updateTiltSensitivitySlider()
+    }
+
+    private func setTiltSensitivity(fromBaseX baseX: CGFloat) {
+        let progress = clamp(
+            (baseX - Constants.tiltSensitivitySliderLeftX) / Constants.tiltSensitivitySliderWidth,
+            0,
+            1
+        )
+        setTiltSensitivity(
+            Constants.tiltSensitivityMin
+                + progress * (Constants.tiltSensitivityMax - Constants.tiltSensitivityMin)
+        )
+    }
+
+    private func updateTiltSensitivitySlider() {
+        guard tiltSensitivityTrack.parent != nil else {
+            return
+        }
+        let progress = clamp(
+            (tiltSensitivity - Constants.tiltSensitivityMin) / (Constants.tiltSensitivityMax - Constants.tiltSensitivityMin),
+            0,
+            1
+        )
+        let fillWidth = max(6, Constants.tiltSensitivitySliderWidth * progress)
+        let fillCenterX = Constants.tiltSensitivitySliderLeftX + fillWidth * 0.5
+        tiltSensitivityFill.xScale = fillWidth / Constants.tiltSensitivitySliderWidth
+        tiltSensitivityFill.position = baseToStage(CGPoint(x: fillCenterX, y: Constants.tiltSensitivitySliderY))
+        let knobX = Constants.tiltSensitivitySliderLeftX + Constants.tiltSensitivitySliderWidth * progress
+        tiltSensitivityKnob.position = baseToStage(CGPoint(x: knobX, y: Constants.tiltSensitivitySliderY))
+        tiltSensitivityLabel?.text = tiltSensitivityDescription(for: tiltSensitivity)
+    }
+
+    private func tiltSensitivityDescription(for value: CGFloat) -> String {
+        if value < 1.85 {
+            return "Low"
+        }
+        if value > 2.75 {
+            return "High"
+        }
+        return "Normal"
+    }
+
     private func setTiltEnabled(_ value: Bool, showBannerText: Bool) {
         tiltEnabled = value
         profileStore.tiltEnabled = value
@@ -3868,8 +5258,12 @@ final class GameScene: SKScene {
     }
 
     private func updatePauseToggleLabels() {
+        audioSettingsLabel?.text = "Audio & Feedback"
         musicToggleLabel?.text = musicMuted ? "Music: Off" : "Music: On"
         sfxToggleLabel?.text = sfxMuted ? "Effects: Off" : "Effects: On"
+        hapticsToggleLabel?.text = hapticsMuted ? "Haptics: Off" : "Haptics: On"
+        inputSettingsLabel?.text = "Input Settings"
+        howToPlayLabel?.text = "How to Play"
         tiltToggleLabel?.text = tiltEnabled ? "Tilt: On" : "Tilt: Off"
         tiltCalibrateLabel?.text = "Calibrate"
     }
@@ -3902,6 +5296,7 @@ final class GameScene: SKScene {
         spawnSpark(at: player.position, color: UIColor(red: 0.62, green: 1.0, blue: 1.0, alpha: 1.0), count: 10)
         addScreenShake(duration: 0.11, magnitude: 5 + CGFloat(dashRank))
         audio.playSFX(.dash)
+        haptics.play(.mediumImpact)
     }
 
     private func triggerPulse() {
@@ -3921,6 +5316,7 @@ final class GameScene: SKScene {
         spawnSpark(at: player.position, color: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0), count: 12)
         addScreenShake(duration: 0.20, magnitude: 8 + CGFloat(pulseRank) * 1.8)
         audio.playSFX(.pulse)
+        haptics.play(.mediumImpact)
     }
 
     private func updateActivePulses(delta: TimeInterval) {
@@ -4337,6 +5733,7 @@ final class GameScene: SKScene {
         if playDamageSound {
             audio.playSFX(.playerDamage)
         }
+        haptics.play(.warning)
         addScreenShake(duration: 0.18, magnitude: 10)
         if player.health <= 0 {
             endRun()
@@ -4447,6 +5844,8 @@ final class GameScene: SKScene {
         switch enemy.kind {
         case .boss:
             typeBonus = 2.8
+        case .bossDecoy:
+            typeBonus = 0.85
         case .influenza:
             typeBonus = 1.2
         case .fast:
@@ -4611,6 +6010,10 @@ final class GameScene: SKScene {
                 joystickTouchId = nil
                 joystickVector = .zero
                 updateJoystickVisual()
+            }
+            if touchId == tiltSensitivityTouchId {
+                tiltSensitivityTouchId = nil
+                haptics.prepare()
             }
             fireTouchIds.remove(touchId)
         }

@@ -37,6 +37,7 @@ const MOBILE_MAX_PARTICLES := 96
 const DESKTOP_MAX_PARTICLES := 220
 const MOBILE_PARTICLE_SCALE := 0.55
 const MOBILE_PULSE_SEGMENT_SCALE := 0.55
+const MOBILE_MAX_FPS := 30
 
 const SPRITE_ATLAS := "res://assets/sprites/processed/bloodstream-asset-atlas-transparent-no-despill.png"
 const INFLUENZA_SHEET := "res://assets/sprites/processed/influenza-virion-spritesheet.png"
@@ -67,6 +68,10 @@ const PARALLAX := [
 	{"path": "res://assets/backgrounds/parallax/processed/layer-02b-branch-openings.png", "speed": 0.34, "alpha": 0.64},
 	{"path": "res://assets/backgrounds/parallax/processed/layer-03-foreground-vessel-walls.png", "speed": 0.62, "alpha": 1.0},
 	{"path": "res://assets/backgrounds/parallax/processed/layer-04-foreground-floaters-seam-clean.png", "speed": 0.78, "alpha": 0.42},
+]
+
+const MOBILE_PARALLAX := [
+	{"path": "res://assets/backgrounds/parallax/processed/mobile-composite-flat.png", "speed": 0.24, "alpha": 1.0},
 ]
 
 const FRAMES := {
@@ -229,9 +234,11 @@ var audio_streams = {}
 var rng = RandomNumberGenerator.new()
 
 var bg_root: Node2D
+var game_stage_root: Node2D
 var entity_root: Node2D
 var fx_root: Node2D
 var ui_layer: CanvasLayer
+var ui_stage: Control
 var start_panel: Control
 var pause_panel: Control
 var complete_panel: Control
@@ -281,6 +288,7 @@ var mobile_fire_held = false
 var mobile_dash_requested = false
 var mobile_pulse_requested = false
 var mobile_move_pointer_id = -1
+var mobile_mouse_move_active = false
 var mobile_move_vector = Vector2.ZERO
 var restart_confirm_pending = false
 var restart_confirm_timer = 0.0
@@ -346,18 +354,19 @@ var ui_hover_sound_timer = 0.0
 var dash_trail_timer = 0.0
 var lock_target_id = -1
 
-
 func _ready() -> void:
 	rng.randomize()
 	mobile_performance_mode = _is_mobile_performance_target()
 	if mobile_performance_mode:
-		Engine.max_fps = 60
+		Engine.max_fps = MOBILE_MAX_FPS
 	_load_assets()
 	_setup_scene()
 	_setup_ui()
 	_setup_audio()
-	_reset_run()
+	_reset_run(false)
 	_show_start()
+	if _cmdline_has("--autostart-run"):
+		_start_run()
 
 
 func _process(delta: float) -> void:
@@ -398,6 +407,8 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if (event is InputEventMouseButton or event is InputEventMouseMotion) and _handle_mobile_move_input(event):
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_ESCAPE or event.keycode == KEY_P:
 			_toggle_pause()
@@ -408,6 +419,16 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
 		if running and not paused and not waiting_for_upgrade and not game_over and not _point_inside_active_ui(event.position) and not _point_inside_mobile_joystick_area(event.position):
 			_fire_antibodies(true)
+
+
+func _cmdline_has(flag: String) -> bool:
+	for arg in OS.get_cmdline_args():
+		if arg == flag:
+			return true
+	for arg in OS.get_cmdline_user_args():
+		if arg == flag:
+			return true
+	return false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -445,7 +466,7 @@ func _load_assets() -> void:
 		UPGRADE_MEDALLION_CHEMOTAXIS,
 		GAME_OVER_PANEL_ART,
 	]
-	for layer in PARALLAX:
+	for layer in _background_layers():
 		paths.append(layer.path)
 	for path in paths:
 		textures[path] = load(path)
@@ -470,20 +491,24 @@ func _setup_scene() -> void:
 	bg_root = Node2D.new()
 	bg_root.name = "ParallaxBackground"
 	add_child(bg_root)
+	game_stage_root = Node2D.new()
+	game_stage_root.name = "GameplayStage"
+	add_child(game_stage_root)
 	entity_root = Node2D.new()
 	entity_root.name = "Entities"
-	add_child(entity_root)
+	game_stage_root.add_child(entity_root)
 	fx_root = Node2D.new()
 	fx_root.name = "Effects"
-	add_child(fx_root)
-	for i in PARALLAX.size():
-		var layer_data: Dictionary = PARALLAX[i]
+	game_stage_root.add_child(fx_root)
+	var background_layers = _background_layers()
+	for i in background_layers.size():
+		var layer_data: Dictionary = background_layers[i]
 		var holder = Node2D.new()
 		holder.name = "Layer%s" % i
 		holder.set_meta("speed", layer_data.speed)
 		holder.set_meta("texture_width", 1280.0)
 		bg_root.add_child(holder)
-		for copy in 4:
+		for copy in _background_tile_copy_count():
 			var sprite = Sprite2D.new()
 			sprite.texture = textures[layer_data.path]
 			sprite.centered = false
@@ -524,10 +549,16 @@ func _setup_ui() -> void:
 	ui_layer = CanvasLayer.new()
 	ui_layer.name = "UI"
 	add_child(ui_layer)
+	ui_stage = Control.new()
+	ui_stage.name = "UIStage"
+	ui_stage.position = Vector2.ZERO
+	ui_stage.size = BASE_SIZE
+	ui_stage.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui_layer.add_child(ui_stage)
 	hud = Control.new()
 	hud.name = "HUD"
 	hud.set_anchors_preset(Control.PRESET_FULL_RECT)
-	ui_layer.add_child(hud)
+	ui_stage.add_child(hud)
 
 	var score_box = _hud_box(HUD_GAME_SCORE_FRAME, Vector2(22, 12), Vector2(210, 84))
 	hud.add_child(score_box)
@@ -607,12 +638,12 @@ func _setup_ui() -> void:
 	upgrade_panel = _make_upgrade_panel()
 	game_over_panel = _make_game_over_panel()
 	mobile_controls = _make_mobile_controls()
-	ui_layer.add_child(start_panel)
-	ui_layer.add_child(pause_panel)
-	ui_layer.add_child(complete_panel)
-	ui_layer.add_child(upgrade_panel)
-	ui_layer.add_child(game_over_panel)
-	ui_layer.add_child(mobile_controls)
+	ui_stage.add_child(start_panel)
+	ui_stage.add_child(pause_panel)
+	ui_stage.add_child(complete_panel)
+	ui_stage.add_child(upgrade_panel)
+	ui_stage.add_child(game_over_panel)
+	ui_stage.add_child(mobile_controls)
 
 
 func _hud_texture(path: String, pos: Vector2, size: Vector2) -> Sprite2D:
@@ -1535,6 +1566,30 @@ func _should_show_mobile_controls() -> bool:
 	return mobile_performance_mode or _is_mobile_performance_target()
 
 
+func _background_layers() -> Array:
+	return MOBILE_PARALLAX if mobile_performance_mode else PARALLAX
+
+
+func _background_tile_copy_count() -> int:
+	return 3 if mobile_performance_mode else 4
+
+
+func _stage_origin_for_size(visible_size: Vector2) -> Vector2:
+	return Vector2(maxf(0.0, (visible_size.x - BASE_SIZE.x) * 0.5), maxf(0.0, (visible_size.y - BASE_SIZE.y) * 0.5))
+
+
+func _current_stage_origin() -> Vector2:
+	if ui_stage != null:
+		return ui_stage.position
+	if game_stage_root != null:
+		return game_stage_root.position
+	return _stage_origin_for_size(_visible_game_size())
+
+
+func _viewport_to_stage_point(point: Vector2) -> Vector2:
+	return point - _current_stage_origin()
+
+
 func _gameplay_inputs_active() -> bool:
 	return running and not paused and not waiting_for_upgrade and not game_over
 
@@ -1554,15 +1609,33 @@ func _handle_mobile_move_input(event: InputEvent) -> bool:
 	if event is InputEventScreenDrag and event.index == mobile_move_pointer_id:
 		_set_mobile_move_from_position(event.position)
 		return true
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			if _gameplay_inputs_active() and _point_inside_mobile_joystick_area(event.position):
+				mobile_mouse_move_active = true
+				_set_mobile_move_from_position(event.position)
+				return true
+		elif mobile_mouse_move_active:
+			_release_mobile_joystick()
+			return true
+	if event is InputEventMouseMotion and mobile_mouse_move_active:
+		if (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+			_set_mobile_move_from_position(event.position)
+			return true
+		_release_mobile_joystick()
+		return true
 	return false
 
 
 func _point_inside_mobile_joystick_area(point: Vector2) -> bool:
-	return mobile_controls != null and mobile_controls.visible and point.distance_to(MOBILE_JOYSTICK_CENTER) <= MOBILE_JOYSTICK_TOUCH_RADIUS
+	if mobile_controls == null or not mobile_controls.visible:
+		return false
+	var stage_point = _viewport_to_stage_point(point)
+	return stage_point.distance_to(MOBILE_JOYSTICK_CENTER) <= MOBILE_JOYSTICK_TOUCH_RADIUS
 
 
 func _set_mobile_move_from_position(point: Vector2) -> void:
-	var offset = point - MOBILE_JOYSTICK_CENTER
+	var offset = _viewport_to_stage_point(point) - MOBILE_JOYSTICK_CENTER
 	var normalized = offset / MOBILE_JOYSTICK_RADIUS
 	if normalized.length() < MOBILE_JOYSTICK_DEADZONE:
 		mobile_move_vector = Vector2.ZERO
@@ -1573,6 +1646,7 @@ func _set_mobile_move_from_position(point: Vector2) -> void:
 
 func _release_mobile_joystick() -> void:
 	mobile_move_pointer_id = -1
+	mobile_mouse_move_active = false
 	mobile_move_vector = Vector2.ZERO
 	_sync_mobile_joystick_visual()
 
@@ -1714,7 +1788,7 @@ func _make_sprite(path: String, frame: Rect2, pos: Vector2, scale_amount: float)
 	return sprite
 
 
-func _reset_run() -> void:
+func _reset_run(load_first_level := true) -> void:
 	running = false
 	paused = false
 	waiting_for_upgrade = false
@@ -1749,8 +1823,16 @@ func _reset_run() -> void:
 	horizontal_sound_input = 0
 	dash_trail_timer = 0.0
 	lock_target_id = -1
-	_clear_entities()
-	_load_level(1)
+	if load_first_level:
+		_load_level(1)
+	else:
+		active_mission = _mission_for_level(1)
+		level_length = 3200.0
+		level_goal = 0
+		spawn_enemy_timer = 0.15
+		spawn_red_timer = 0.25
+		spawn_platelet_timer = 3.5
+		_clear_entities()
 
 
 func _clear_entities() -> void:
@@ -1809,10 +1891,14 @@ func _show_start() -> void:
 	upgrade_panel.visible = false
 	game_over_panel.visible = false
 	hud.visible = false
+	if banner_label != null:
+		banner_label.visible = false
 	_play_music("menu")
+	set_process(false)
 
 
 func _start_run() -> void:
+	set_process(true)
 	_reset_run()
 	running = true
 	start_panel.visible = false
@@ -1822,11 +1908,12 @@ func _start_run() -> void:
 
 func _confirm_restart() -> void:
 	_play_sfx("restart_confirm")
-	_reset_run()
+	_reset_run(false)
 	start_panel.visible = true
 	pause_panel.visible = false
 	hud.visible = false
 	_play_music("menu")
+	set_process(false)
 
 
 func _request_restart_confirmation() -> void:
@@ -1846,7 +1933,6 @@ func _request_restart_confirmation() -> void:
 
 func _restart_from_game_over() -> void:
 	game_over_panel.visible = false
-	_reset_run()
 	_start_run()
 
 
@@ -3424,8 +3510,19 @@ func _update_viewport_layout() -> void:
 	if visible_size == _cached_visible_game_size:
 		return
 	_cached_visible_game_size = visible_size
+	var stage_origin = _stage_origin_for_size(visible_size)
+	if bg_root != null:
+		bg_root.position = Vector2.ZERO
+		bg_root.scale = Vector2.ONE
+	if game_stage_root != null:
+		game_stage_root.position = stage_origin
+		game_stage_root.scale = Vector2.ONE
+	if ui_stage != null:
+		ui_stage.position = stage_origin
+		ui_stage.scale = Vector2.ONE
+		ui_stage.size = BASE_SIZE
 	if progress_bar != null:
-		progress_bar.position = Vector2((visible_size.x - progress_bar.size.x) * 0.5, visible_size.y - 50.0)
+		progress_bar.position = Vector2((BASE_SIZE.x - progress_bar.size.x) * 0.5, BASE_SIZE.y - 50.0)
 	_refresh_background_layout(visible_size)
 
 
@@ -3454,10 +3551,10 @@ func _update_backgrounds() -> void:
 		var speed = float(holder.get_meta("speed", 0.1))
 		var layer_scale = float(holder.get_meta("layer_scale", 1.0))
 		var draw_width = float(holder.get_meta("draw_width", visible_size.x))
+		var y = float(holder.get_meta("draw_y", 0.0))
 		var scroll_position = scroll * speed
 		var base_index = floori(scroll_position / draw_width)
 		var local_offset = -(scroll_position - float(base_index) * draw_width)
-		var y = float(holder.get_meta("draw_y", 0.0))
 		for i in holder.get_child_count():
 			var sprite = holder.get_child(i) as Sprite2D
 			var tile = i - 1
