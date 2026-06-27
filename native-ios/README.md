@@ -20,6 +20,8 @@ The first slice targets `com.niko.bloodstreamdefender.spritekit` and uses a UIKi
 - Touch joystick and action buttons with layered translucent glass styling, highlights, rim glow, and glyph details.
 - CoreMotion tilt movement with pause-menu toggle/calibration and saved tilt preference; keyboard and joystick input remain higher priority for testing.
 - Keyboard testing controls for Simulator: WASD/arrows to move, Space/Return to fire, P to pause/resume.
+- Illustrated full-screen How to Play onboarding accessible from the title and pause menus.
+- Game Center leaderboard hooks, saved haptic preference, audio/feedback settings, and simulator fallback messaging when Game Center cannot open.
 - Godot-style mission names, level goals, level length/progress gating, difficulty scaling, and regular enemy mix.
 - Basic, fast, tank, budding, and influenza enemy variants using the existing sprite sheets.
 - Influenza replication behavior when live influenza virions touch.
@@ -27,6 +29,7 @@ The first slice targets `com.niko.bloodstreamdefender.spritekit` and uses a UIKi
 - Platelet obstacles with Godot-style level-scaled target density, quick refill when below target, bump/crack feedback, dash breaking, and pulse breaking.
 - Encounter warning flow that clears the vessel lane before a boss enters.
 - Pox-Brick, Adenovirus, and Filovirus boss profiles using existing boss sheets, normalized padded frame cells, health, target positions, phase/shield/frame behavior, and add spawns.
+- Rotavirus Gyre, Lyssavirus Lance, and Norovirus Swarm-Core boss profiles using new processed sprite sheets and unique timing, charge, and decoy mechanics.
 - Antibody shooting, homing, collisions, player damage, health, and score HUD.
 - Godot-style HUD progress with left-anchored fills, cleaned-up score/health/level placement, level-complete panel, pause/settings panel, restart confirmation, upgrade picker with yellow glowing pips, and run-complete summary using existing UI art with live SpriteKit text.
 - A level loop with target counts, section clear tracking, survival time, total neutralizations, bosses neutralized, and adaptation summary.
@@ -61,7 +64,6 @@ Full `xcodebuild` validation in that sandbox reached Swift compilation but faile
 
 ## Next Porting Steps
 
-- Tune visual spacing and readability after more device-size screenshots, especially the dense upgrade and summary panels.
+- Continue playtest tuning boss durability, warning clarity, and late-run pacing after device/TestFlight feedback.
 - Promote the copied loose gameplay PNG/audio files into Xcode asset catalogs and SpriteKit texture atlases.
-- Add richer profile/progression data after the full Godot economy is ported.
-- Add final launch metadata, store display name, and signing/team settings before device/TestFlight builds.
+- Add final launch metadata, store display name, leaderboard records, and signing/team settings before device/TestFlight builds.

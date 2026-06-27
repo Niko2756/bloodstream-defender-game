@@ -13,23 +13,23 @@ This branch is focused on the native iOS rebuild. The older Godot project in the
 - Deployment target: iOS 18.0.
 - App version: `0.1`.
 - Rendering stack: UIKit `SKView` plus SpriteKit scene.
-- Current polish focus: HUD spacing, mission progress frame, ability button layering, and high-level performance under dense enemy/projectile load.
+- Current milestone: polished native SpriteKit build with onboarding, Game Center hooks, haptics, input/audio settings, upgraded App Store icon assets, and six boss encounter profiles.
 
 ## Screenshots
 
 Captured from the native iOS build running on the iPhone 17 Pro simulator.
 
-| Title | Gameplay |
+| Title | How to Play |
 | --- | --- |
-| <img src="docs/screenshots/title-screen.png" alt="Bloodstream Defender title screen" width="420"> | <img src="docs/screenshots/gameplay-hud.png" alt="Bloodstream Defender gameplay HUD" width="420"> |
+| <img src="docs/screenshots/title-screen.png" alt="Bloodstream Defender title screen" width="420"> | <img src="docs/screenshots/how-to-play.png" alt="Illustrated How to Play screen" width="420"> |
 
-| Upgrade Paths | Pause Settings |
+| Gameplay | Upgrade Paths |
 | --- | --- |
-| <img src="docs/screenshots/upgrade-tree.png" alt="Choose an upgrade path screen" width="420"> | <img src="docs/screenshots/pause-menu.png" alt="Pause settings screen" width="420"> |
+| <img src="docs/screenshots/gameplay-hud.png" alt="Bloodstream Defender gameplay HUD" width="420"> | <img src="docs/screenshots/upgrade-tree.png" alt="Choose an upgrade path screen" width="420"> |
 
-| Run Summary |
-| --- |
-| <img src="docs/screenshots/game-over-summary.png" alt="Immune run complete summary screen" width="420"> |
+| Pause Settings | Run Summary |
+| --- | --- |
+| <img src="docs/screenshots/pause-menu.png" alt="Pause settings screen" width="420"> | <img src="docs/screenshots/game-over-summary.png" alt="Immune run complete summary screen" width="420"> |
 
 ## Features
 
@@ -39,10 +39,13 @@ Captured from the native iOS build running on the iPhone 17 Pro simulator.
 - Antibody projectiles with homing, rapid-fire upgrades, paired shots, stronger hits, and spread behavior.
 - Regular enemy mix including basic viruses, fast variants, tank variants, budding viruses, and influenza replication.
 - Platelet obstacles with collision damage, crack feedback, dash breaking, and pulse breaking.
-- Boss encounters for Pox-Brick, Adenovirus, and Filovirus profiles.
+- Boss encounters for Pox-Brick, Adenovirus Prism, Filovirus Ribbon, Rotavirus Gyre, Lyssavirus Lance, and Norovirus Swarm-Core.
+- Rotavirus shield timing, Lyssavirus charge/recovery windows, and Norovirus decoy-orb pressure add variety without changing the dodge/shoot/survive core loop.
 - Level progression with mission names, target counts, section clear tracking, score, health, and best-run persistence.
 - Upgrade branches for Rapid Antibody Factory, Complement Pulse, and Chemotaxis Dash.
-- Pause/settings flow with music, effects, tilt toggle, calibration, and restart confirmation.
+- Illustrated full-screen How to Play page for first-run onboarding and App Store screenshot use.
+- Pause/settings flow with Audio & Feedback, haptics, input settings, tilt toggle, calibration, and restart confirmation.
+- Game Center leaderboard wiring with in-game fallback messaging when the simulator/account cannot open leaderboards.
 - Menu, combat, danger, boss, upgrade, ambience, hit, dash, pulse, pause, and completion audio.
 - Performance work for busy higher levels, including projectile pooling, spark pooling, effect budgeting, and offscreen spawn fixes.
 
@@ -111,21 +114,23 @@ xcodebuild -project native-ios/BloodstreamDefenderSpriteKit.xcodeproj -scheme Bl
 ## Project Layout
 
 ```text
-native-ios/
-├── BloodstreamDefenderSpriteKit.xcodeproj   # Xcode project
-├── BloodstreamDefenderSpriteKit/
-│   ├── AppDelegate.swift
-│   ├── SceneDelegate.swift
-│   ├── GameViewController.swift             # UIKit/SpriteKit host view
-│   ├── GameScene.swift                      # Gameplay, HUD, upgrades, audio, and level flow
-│   ├── Info.plist
-│   ├── Assets.xcassets/                     # Native app icon catalog
-│   └── Assets/
-│       ├── audio/                           # Runtime music and effects
-│       ├── backgrounds/parallax/            # Bloodstream background layers
-│       ├── sprites/                         # Player, enemies, bosses, and atlas sources
-│       └── ui/                              # HUD, menus, buttons, and upgrade art
-└── README.md                                # Extra native-port notes
+.
+├── native-ios/
+│   ├── BloodstreamDefenderSpriteKit.xcodeproj   # Xcode project
+│   ├── BloodstreamDefenderSpriteKit/
+│   │   ├── AppDelegate.swift
+│   │   ├── SceneDelegate.swift
+│   │   ├── GameViewController.swift             # UIKit/SpriteKit host view
+│   │   ├── GameScene.swift                      # Gameplay, HUD, upgrades, audio, and level flow
+│   │   ├── Info.plist
+│   │   ├── Assets.xcassets/                     # Native app icon catalog
+│   │   └── Assets/
+│   │       ├── audio/                           # Runtime music and effects
+│   │       ├── backgrounds/parallax/            # Bloodstream background layers
+│   │       ├── sprites/                         # Player, enemies, bosses, and atlas sources
+│   │       └── ui/                              # HUD, menus, buttons, and upgrade art
+│   └── README.md                                # Extra native-port notes
+└── docs/screenshots/                            # README and App Store reference screenshots
 ```
 
 The root-level Godot files remain in the repo as reference material. They are not required to build or run the native iOS app.
@@ -134,5 +139,6 @@ The root-level Godot files remain in the repo as reference material. They are no
 
 - Keep gameplay behavior intact when optimizing performance; prefer pooling and cosmetic budgets over reducing enemies, bullets, bosses, damage, or upgrades.
 - Generated UI assets should remain modular so labels and dynamic numbers stay live in SpriteKit.
+- Keep the approved `docs/screenshots/how-to-play.png` and `native-ios/BloodstreamDefenderSpriteKit/Assets/ui/how-to-play-imagegen-candidate-v3-controls.png` onboarding art available for App Store screenshot preparation.
 - Keep build products out of source control. Local folders such as `native-ios/DerivedData*/` and `native-ios/SwiftModuleCache/` are ignored.
 - The current visual target is a readable, semi-cartoony bloodstream with ornate immune-themed UI, bright arcade feedback, and stable 60 FPS on the iPhone 17 Pro simulator.
