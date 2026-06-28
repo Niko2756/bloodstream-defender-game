@@ -16,7 +16,7 @@
       "leaderboard_id": "com.niko.bloodstreamdefender.spritekit.bestscore",
       "source_copy": "imagegen-sources/ig_04842b772dcd6d67016a406b0d2534819aa6703fa0160f4946.png",
       "final_export": "final-exports/game-center-challenge-best-score-3840x2160.png",
-      "project_copy": "native-ios/BloodstreamDefenderSpriteKit/Assets/app-store/game-center/game-center-challenge-best-score-3840x2160.png",
+      "project_copy": "native-ios/AppStoreAssets/game-center/game-center-challenge-best-score-3840x2160.png",
       "size": {
         "width": 3840,
         "height": 2160
@@ -30,7 +30,7 @@
       "leaderboard_id": "com.niko.bloodstreamdefender.spritekit.highestlevel",
       "source_copy": "imagegen-sources/ig_04842b772dcd6d67016a406b52f9ac819aa0d7df5699ca9580.png",
       "final_export": "final-exports/game-center-challenge-highest-level-3840x2160.png",
-      "project_copy": "native-ios/BloodstreamDefenderSpriteKit/Assets/app-store/game-center/game-center-challenge-highest-level-3840x2160.png",
+      "project_copy": "native-ios/AppStoreAssets/game-center/game-center-challenge-highest-level-3840x2160.png",
       "size": {
         "width": 3840,
         "height": 2160

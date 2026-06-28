@@ -11,7 +11,7 @@ This branch is focused on the native iOS rebuild. The older Godot project in the
 - Bundle identifier: `com.niko.bloodstreamdefender.spritekit`.
 - Primary simulator target: iPhone 17 Pro.
 - Deployment target: iOS 18.0.
-- App version: `0.1`.
+- App version: `1.0`.
 - Rendering stack: UIKit `SKView` plus SpriteKit scene.
 - Current milestone: polished native SpriteKit build with onboarding, Game Center hooks, haptics, input/audio settings, upgraded App Store icon assets, and six boss encounter profiles.
 
@@ -129,6 +129,7 @@ xcodebuild -project native-ios/BloodstreamDefenderSpriteKit.xcodeproj -scheme Bl
 │   │       ├── backgrounds/parallax/            # Bloodstream background layers
 │   │       ├── sprites/                         # Player, enemies, bosses, and atlas sources
 │   │       └── ui/                              # HUD, menus, buttons, and upgrade art
+│   ├── AppStoreAssets/                          # App Store screenshots and Game Center art, not bundled
 │   └── README.md                                # Extra native-port notes
 └── docs/screenshots/                            # README and App Store reference screenshots
 ```

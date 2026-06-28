@@ -8,6 +8,7 @@ This folder contains the new native iOS/SpriteKit rebuild of Bloodstream Defende
 - `BloodstreamDefenderSpriteKit/` - UIKit wrapper and SpriteKit gameplay code.
 - `BloodstreamDefenderSpriteKit/Assets/` - copied assets from the Godot project so the native app bundle is self-contained.
 - `BloodstreamDefenderSpriteKit/Assets.xcassets/` - native app icon catalog for Simulator/device installs.
+- `AppStoreAssets/` - App Store Connect screenshots and Game Center artwork; kept outside the runtime `Assets/` folder so they are not bundled into the shipped app.
 
 ## Vertical Slice Scope
 
