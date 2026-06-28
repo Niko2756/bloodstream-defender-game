@@ -1240,7 +1240,7 @@ final class GameScene: SKScene {
                 bossSpawned = false
                 bossDefeated = false
                 player.health = Constants.playerMaxHealth
-                player.invulnerable = 30.0
+                player.invulnerable = 0.8
                 player.position = CGPoint(x: 210, y: 360)
                 player.velocity = .zero
                 playerNode?.position = baseToStage(player.position)
@@ -3426,7 +3426,7 @@ final class GameScene: SKScene {
         let node = SKSpriteNode(texture: regionTexture(from: profile.texture, frame: frame))
         node.size = visualSize
         node.position = baseToStage(position)
-        node.zPosition = ZLayer.entity + 3
+        node.zPosition = ZLayer.entity + 7
         entityNode.addChild(node)
 
         let boss = Enemy(
@@ -4735,17 +4735,25 @@ final class GameScene: SKScene {
 
     private func updateCollisions() {
         for enemy in enemies where !enemy.dead {
-            if distance(enemy.position, player.position) <= enemy.radius + Constants.playerCollisionRadius {
+            if enemyTouchesPlayer(enemy) {
+                if enemy.kind == .boss {
+                    if player.dashTimer > 0 {
+                        repelPlayerFromBoss(enemy)
+                    } else {
+                        hurtPlayer(amount: enemy.damage, at: enemy.position)
+                        repelPlayerFromBoss(enemy)
+                    }
+                    continue
+                }
+
                 if player.dashTimer > 0 {
                     let push = normalized(CGVector(dx: enemy.position.x - player.position.x, dy: enemy.position.y - player.position.y))
                     enemy.velocity.dx += push.dx * 170
                     enemy.velocity.dy += push.dy * 170
                 } else {
                     hurtPlayer(amount: enemy.damage, at: enemy.position)
-                    if enemy.kind != .boss {
-                        enemy.dead = true
-                        spawnSpark(at: enemy.position, color: UIColor(red: 1.0, green: 0.25, blue: 0.35, alpha: 1.0), count: 12)
-                    }
+                    enemy.dead = true
+                    spawnSpark(at: enemy.position, color: UIColor(red: 1.0, green: 0.25, blue: 0.35, alpha: 1.0), count: 12)
                 }
             }
         }
@@ -4788,6 +4796,68 @@ final class GameScene: SKScene {
             spawnSpark(at: platelet.position, color: UIColor(red: 1.0, green: 0.82, blue: 0.32, alpha: 1.0), count: 10)
         }
 
+        player.position.x = clamp(player.position.x, 60, Constants.baseSize.width - 90)
+        player.position.y = clamp(player.position.y, 90, Constants.baseSize.height - 80)
+        playerNode?.position = baseToStage(player.position)
+    }
+
+    private func enemyTouchesPlayer(_ enemy: Enemy) -> Bool {
+        if enemy.kind == .boss {
+            return bossTouchesPlayer(enemy)
+        }
+        return distance(enemy.position, player.position) <= enemy.radius + Constants.playerCollisionRadius
+    }
+
+    private func bossTouchesPlayer(_ enemy: Enemy) -> Bool {
+        if enemy.bossKind == .lyssavirus, lyssavirusTouchesPlayer(enemy) {
+            return true
+        }
+        return bossBodyTouchesPlayer(enemy)
+    }
+
+    private func bossBodyTouchesPlayer(_ enemy: Enemy) -> Bool {
+        let halfSize = bossContactHalfSize(for: enemy)
+        let dx = abs(player.position.x - enemy.position.x)
+        let dy = abs(player.position.y - enemy.position.y)
+        let outsideX = max(0, dx - halfSize.width)
+        let outsideY = max(0, dy - halfSize.height)
+        return outsideX * outsideX + outsideY * outsideY <= Constants.playerCollisionRadius * Constants.playerCollisionRadius
+    }
+
+    private func bossContactHalfSize(for enemy: Enemy) -> CGSize {
+        let visualWidth = max(enemy.node.size.width, enemy.radius * 2)
+        let visualHeight = max(enemy.node.size.height, enemy.radius * 2)
+        return CGSize(
+            width: max(enemy.radius * 1.55, visualWidth * 0.70),
+            height: max(enemy.radius * 1.45, visualHeight * 0.62)
+        )
+    }
+
+    private func lyssavirusTouchesPlayer(_ enemy: Enemy) -> Bool {
+        let visualWidth = max(enemy.node.size.width, enemy.radius * 2)
+        let visualHeight = max(enemy.node.size.height, enemy.radius * 2)
+        let axis = CGVector(dx: -1, dy: 0)
+        let noseReach = max(enemy.radius * 0.82, visualWidth * 0.45)
+        let tailReach = max(enemy.radius * 0.22, visualWidth * 0.16)
+        let bodyRadius = max(enemy.radius * 0.48, visualHeight * 0.20)
+        let from = CGPoint(
+            x: enemy.position.x - axis.dx * tailReach,
+            y: enemy.position.y - axis.dy * tailReach
+        )
+        let to = CGPoint(
+            x: enemy.position.x + axis.dx * noseReach,
+            y: enemy.position.y + axis.dy * noseReach
+        )
+        return segmentHitsCircle(from: from, to: to, center: player.position, radius: bodyRadius + Constants.playerCollisionRadius)
+    }
+
+    private func repelPlayerFromBoss(_ enemy: Enemy) {
+        let verticalOffset = clamp((player.position.y - enemy.position.y) / max(enemy.radius, 1), -0.75, 0.75)
+        let push = normalized(CGVector(dx: -1.0, dy: verticalOffset * 0.55))
+        player.position.x += push.dx * 28
+        player.position.y += push.dy * 20
+        player.velocity.dx = min(player.velocity.dx, 0) + push.dx * 190
+        player.velocity.dy += push.dy * 130
         player.position.x = clamp(player.position.x, 60, Constants.baseSize.width - 90)
         player.position.y = clamp(player.position.y, 90, Constants.baseSize.height - 80)
         playerNode?.position = baseToStage(player.position)
@@ -5929,9 +5999,10 @@ final class GameScene: SKScene {
         stageNode.position = stageOrigin
     }
 
-    private func hurtPlayer(amount: CGFloat, at position: CGPoint, playDamageSound: Bool = true) {
+    @discardableResult
+    private func hurtPlayer(amount: CGFloat, at position: CGPoint, playDamageSound: Bool = true) -> Bool {
         guard player.invulnerable <= 0 else {
-            return
+            return false
         }
         player.health = max(0, player.health - amount)
         player.hurtTimer = 0.7
@@ -5947,6 +6018,7 @@ final class GameScene: SKScene {
         if player.health <= 0 {
             endRun()
         }
+        return true
     }
 
     private func updateHUD() {
