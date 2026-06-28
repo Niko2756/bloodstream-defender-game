@@ -135,8 +135,10 @@ private struct Constants {
     static let tiltSensitivityMin: CGFloat = 1.35
     static let tiltSensitivityDefault: CGFloat = 1.8
     static let tiltSensitivityMax: CGFloat = 3.35
-    static let scoreLeaderboardID = "com.niko.bloodstreamdefender.spritekit.best_score"
-    static let levelLeaderboardID = "com.niko.bloodstreamdefender.spritekit.highest_level"
+    static let scoreLeaderboardID = "com.niko.bloodstreamdefender.spritekit.bestscore"
+    static let levelLeaderboardID = "com.niko.bloodstreamdefender.spritekit.highestlevel"
+    static let scoreChallengeDefinitionID = "com.niko.bloodstreamdefender.spritekit.challenge.bestscore"
+    static let levelChallengeDefinitionID = "com.niko.bloodstreamdefender.spritekit.challenge.highestlevel"
     static let maxUpgradeRank = 4
     static let dangerMusicThreshold: CGFloat = 0.42
     static let dangerMusicResetRatio: CGFloat = 0.72
@@ -488,11 +490,60 @@ private final class HapticEngine {
 }
 
 private final class GameCenterService {
+    private enum PendingPresentation {
+        case leaderboards
+        case challenges
+        case challenge(ChallengeKind)
+    }
+
+    enum ChallengeKind {
+        case bestScore
+        case highestLevel
+
+        var definitionID: String {
+            switch self {
+            case .bestScore:
+                return Constants.scoreChallengeDefinitionID
+            case .highestLevel:
+                return Constants.levelChallengeDefinitionID
+            }
+        }
+    }
+
+    enum PresentationResult {
+        case presented
+        case authenticating
+        case unavailable
+    }
+
     private(set) var isAuthenticated = false
+    private var isAuthenticating = false
     private var pendingRecord: RunRecord?
+    private var pendingPresentation: PendingPresentation?
     var onAuthenticationChanged: ((Bool) -> Void)?
+    var onPresentationResult: ((PresentationResult) -> Void)?
 
     func authenticate(presentingViewController: UIViewController?, bestRunProvider: @escaping () -> RunRecord?) {
+        authenticate(
+            presentingViewController: presentingViewController,
+            bestRunProvider: bestRunProvider,
+            pendingPresentation: nil
+        )
+    }
+
+    private func authenticate(
+        presentingViewController: UIViewController?,
+        bestRunProvider: @escaping () -> RunRecord?,
+        pendingPresentation: PendingPresentation?
+    ) {
+        if let pendingPresentation {
+            self.pendingPresentation = pendingPresentation
+        }
+        if isAuthenticating && !GKLocalPlayer.local.isAuthenticated {
+            return
+        }
+
+        isAuthenticating = true
         GKLocalPlayer.local.authenticateHandler = { [weak self, weak presentingViewController] viewController, error in
             guard let self else {
                 return
@@ -503,6 +554,7 @@ private final class GameCenterService {
                 return
             }
 
+            self.isAuthenticating = false
             self.isAuthenticated = GKLocalPlayer.local.isAuthenticated
             self.onAuthenticationChanged?(self.isAuthenticated)
             if self.isAuthenticated {
@@ -511,8 +563,19 @@ private final class GameCenterService {
                 } else if let pendingRecord = self.pendingRecord {
                     self.submit(record: pendingRecord)
                 }
-            } else if error != nil {
-                self.pendingRecord = bestRunProvider()
+                if let pendingPresentation = self.pendingPresentation {
+                    self.pendingPresentation = nil
+                    self.onPresentationResult?(self.present(pendingPresentation, from: presentingViewController))
+                }
+            } else {
+                if error != nil {
+                    self.pendingRecord = bestRunProvider()
+                }
+                let hadPendingPresentation = self.pendingPresentation != nil
+                self.pendingPresentation = nil
+                if hadPendingPresentation {
+                    self.onPresentationResult?(.unavailable)
+                }
             }
         }
     }
@@ -545,23 +608,90 @@ private final class GameCenterService {
     }
 
     @discardableResult
-    func showLeaderboards(from presentingViewController: UIViewController?) -> Bool {
+    func showLeaderboards(from presentingViewController: UIViewController?) -> PresentationResult {
         guard GKLocalPlayer.local.isAuthenticated else {
-            authenticate(presentingViewController: presentingViewController) {
-                nil
-            }
-            return false
+            authenticate(
+                presentingViewController: presentingViewController,
+                bestRunProvider: { nil },
+                pendingPresentation: .leaderboards
+            )
+            return .authenticating
         }
 
+        return present(.leaderboards, from: presentingViewController)
+    }
+
+    @discardableResult
+    func showChallenges(from presentingViewController: UIViewController?) -> PresentationResult {
+        guard #available(iOS 26.0, *) else {
+            return .unavailable
+        }
+
+        guard GKLocalPlayer.local.isAuthenticated else {
+            authenticate(
+                presentingViewController: presentingViewController,
+                bestRunProvider: { nil },
+                pendingPresentation: .challenges
+            )
+            return .authenticating
+        }
+
+        return present(.challenges, from: presentingViewController)
+    }
+
+    @discardableResult
+    func showChallenge(_ kind: ChallengeKind, from presentingViewController: UIViewController?) -> PresentationResult {
+        guard #available(iOS 26.0, *) else {
+            return .unavailable
+        }
+
+        guard GKLocalPlayer.local.isAuthenticated else {
+            authenticate(
+                presentingViewController: presentingViewController,
+                bestRunProvider: { nil },
+                pendingPresentation: .challenge(kind)
+            )
+            return .authenticating
+        }
+
+        return present(.challenge(kind), from: presentingViewController)
+    }
+
+    private func configureAccessPoint(from presentingViewController: UIViewController?) {
         if let window = presentingViewController?.view.window {
             GKAccessPoint.shared.parentWindow = window
         }
         GKAccessPoint.shared.location = .topTrailing
         GKAccessPoint.shared.isActive = true
-        GKAccessPoint.shared.trigger(state: .leaderboards) {
-            GKAccessPoint.shared.isActive = false
+    }
+
+    private func present(_ pendingPresentation: PendingPresentation, from presentingViewController: UIViewController?) -> PresentationResult {
+        configureAccessPoint(from: presentingViewController)
+        switch pendingPresentation {
+        case .leaderboards:
+            GKAccessPoint.shared.trigger(state: .leaderboards) {
+                GKAccessPoint.shared.isActive = false
+            }
+            return .presented
+        case .challenges:
+            guard #available(iOS 26.0, *) else {
+                GKAccessPoint.shared.isActive = false
+                return .unavailable
+            }
+            GKAccessPoint.shared.triggerForChallenges {
+                GKAccessPoint.shared.isActive = false
+            }
+            return .presented
+        case .challenge(let kind):
+            guard #available(iOS 26.0, *) else {
+                GKAccessPoint.shared.isActive = false
+                return .unavailable
+            }
+            GKAccessPoint.shared.trigger(challengeDefinitionID: kind.definitionID) {
+                GKAccessPoint.shared.isActive = false
+            }
+            return .presented
         }
-        return true
     }
 }
 
@@ -994,6 +1124,7 @@ final class GameScene: SKScene {
     private var titleGroup = SKNode()
     private var startButton = SKShapeNode()
     private var titleHowToPlayButton = SKShapeNode()
+    private var challengesButton = SKShapeNode()
     private var leaderboardsButton = SKShapeNode()
     private var leaderboardsLabel: SKLabelNode?
     private var bestRunLabel: SKLabelNode?
@@ -1212,10 +1343,27 @@ final class GameScene: SKScene {
                     openHowToPlay()
                     continue
                 }
+                if challengesButton.contains(stagePoint) {
+                    playUITap()
+                    switch gameCenter.showChallenges(from: presentingViewController()) {
+                    case .presented:
+                        break
+                    case .authenticating:
+                        showBanner("Checking Game Center")
+                    case .unavailable:
+                        showBanner("Challenges need iOS 26")
+                    }
+                    continue
+                }
                 if leaderboardsButton.contains(stagePoint) {
                     playUITap()
-                    if !gameCenter.showLeaderboards(from: presentingViewController()) {
-                        showBanner("Sign into Game Center")
+                    switch gameCenter.showLeaderboards(from: presentingViewController()) {
+                    case .presented:
+                        break
+                    case .authenticating:
+                        showBanner("Checking Game Center")
+                    case .unavailable:
+                        showBanner("Game Center unavailable")
                     }
                     continue
                 }
@@ -1843,12 +1991,21 @@ final class GameScene: SKScene {
         )
         titleHowToPlayButton = howToPlay.shape
 
+        let challenges = addArtButton(
+            to: titleGroup,
+            center: CGPoint(x: centerX - 132, y: gameCenterY),
+            size: CGSize(width: 218, height: 48),
+            title: "CHALLENGES",
+            fontSize: 15
+        )
+        challengesButton = challenges.shape
+
         let leaderboards = addArtButton(
             to: titleGroup,
-            center: CGPoint(x: centerX, y: gameCenterY),
-            size: CGSize(width: 248, height: 54),
+            center: CGPoint(x: centerX + 132, y: gameCenterY),
+            size: CGSize(width: 218, height: 48),
             title: "LEADERBOARDS",
-            fontSize: 17
+            fontSize: 15
         )
         leaderboardsButton = leaderboards.shape
         leaderboardsLabel = leaderboards.label
@@ -4906,6 +5063,18 @@ final class GameScene: SKScene {
         gameCenter.onAuthenticationChanged = { [weak self] isAuthenticated in
             DispatchQueue.main.async {
                 self?.leaderboardsLabel?.text = isAuthenticated ? "LEADERBOARDS" : "GAME CENTER"
+            }
+        }
+        gameCenter.onPresentationResult = { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .presented:
+                    break
+                case .authenticating:
+                    self?.showBanner("Checking Game Center")
+                case .unavailable:
+                    self?.showBanner("Game Center unavailable")
+                }
             }
         }
         DispatchQueue.main.async { [weak self] in

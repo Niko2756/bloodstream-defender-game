@@ -1,0 +1,41 @@
+{
+  "run_id": "2026-06-27-game-center-challenges",
+  "asset_type": "Apple Game Center challenge default images",
+  "requirements": {
+    "size": "3840x2160",
+    "color": "RGB",
+    "transparency": "none",
+    "ppi": 72,
+    "text_policy": "No baked text; App Store Connect localizations own display names and descriptions."
+  },
+  "items": [
+    {
+      "id": "best-score-challenge",
+      "label": "Best Score Challenge",
+      "challenge_id": "com.niko.bloodstreamdefender.spritekit.challenge.bestscore",
+      "leaderboard_id": "com.niko.bloodstreamdefender.spritekit.bestscore",
+      "source_copy": "imagegen-sources/ig_04842b772dcd6d67016a406b0d2534819aa6703fa0160f4946.png",
+      "final_export": "final-exports/game-center-challenge-best-score-3840x2160.png",
+      "project_copy": "native-ios/BloodstreamDefenderSpriteKit/Assets/app-store/game-center/game-center-challenge-best-score-3840x2160.png",
+      "size": {
+        "width": 3840,
+        "height": 2160
+      },
+      "format": "PNG RGB no alpha"
+    },
+    {
+      "id": "highest-level-challenge",
+      "label": "Highest Level Challenge",
+      "challenge_id": "com.niko.bloodstreamdefender.spritekit.challenge.highestlevel",
+      "leaderboard_id": "com.niko.bloodstreamdefender.spritekit.highestlevel",
+      "source_copy": "imagegen-sources/ig_04842b772dcd6d67016a406b52f9ac819aa0d7df5699ca9580.png",
+      "final_export": "final-exports/game-center-challenge-highest-level-3840x2160.png",
+      "project_copy": "native-ios/BloodstreamDefenderSpriteKit/Assets/app-store/game-center/game-center-challenge-highest-level-3840x2160.png",
+      "size": {
+        "width": 3840,
+        "height": 2160
+      },
+      "format": "PNG RGB no alpha"
+    }
+  ]
+}
