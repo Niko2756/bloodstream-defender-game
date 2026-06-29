@@ -1075,6 +1075,7 @@ final class GameScene: SKScene {
     private var pendingMusicCue: AudioCue?
     private var pendingMusicTimer: TimeInterval = 0
     private var dangerMusicActive = false
+    private var bossDangerMusicSuppressed = false
     private var musicMuted = false
     private var sfxMuted = false
     private var hapticsMuted = false
@@ -2643,6 +2644,7 @@ final class GameScene: SKScene {
         pendingMusicCue = nil
         pendingMusicTimer = 0
         dangerMusicActive = false
+        bossDangerMusicSuppressed = false
         rapidRank = 0
         pulseRank = 0
         dashRank = 0
@@ -2683,6 +2685,7 @@ final class GameScene: SKScene {
         fireTouchIds.removeAll()
         player.health = min(Constants.playerMaxHealth, player.health + 25)
         dangerMusicActive = false
+        bossDangerMusicSuppressed = false
         player.position = CGPoint(x: 210, y: 360)
         player.velocity = .zero
         player.shootCooldown = 0
@@ -2734,6 +2737,7 @@ final class GameScene: SKScene {
         bossWarningTimer = 0
         bossClearTimer = 0
         bossHitFeedbackTimer = 0
+        bossDangerMusicSuppressed = false
         bossWarningStarted = false
         bossSpawned = false
         bossDefeated = false
@@ -3415,6 +3419,7 @@ final class GameScene: SKScene {
         bossSpawned = true
         bossDefeated = false
         let difficulty = difficultyMultiplier()
+        bossDangerMusicSuppressed = dangerMusicActive
         let hpScale = 1 + max(0, difficulty - 1) * 0.9
         let frame = profile.frames[0]
         let visualSize = CGSize(width: frame.rect.width * profile.visualScale, height: frame.rect.height * profile.visualScale)
@@ -4672,6 +4677,7 @@ final class GameScene: SKScene {
             score += enemy.score
             if enemy.kind == .boss {
                 bossDefeated = true
+                bossDangerMusicSuppressed = false
                 bossesNeutralized += 1
                 clearBossDecoys(for: enemy.bossKind)
                 beginBossDeathAnimation(enemy)
@@ -5398,7 +5404,7 @@ final class GameScene: SKScene {
             if bossWarningStarted && !bossSpawned && bossWarningTimer > 0 {
                 return
             }
-            if dangerMusicShouldPlay() {
+            if dangerMusicShouldPlay(), !bossDangerMusicSuppressed {
                 audio.playMusic(.danger)
             } else if activeMission.isEncounter && !bossDefeated && activeBoss() != nil {
                 audio.playMusic(.boss)
@@ -6008,6 +6014,9 @@ final class GameScene: SKScene {
         player.invulnerable = 0.55
         if player.health <= Constants.playerMaxHealth * Constants.dangerMusicThreshold {
             dangerMusicActive = true
+        }
+        if activeMission.isEncounter, !bossDefeated, activeBoss() != nil {
+            bossDangerMusicSuppressed = false
         }
         if playDamageSound {
             audio.playSFX(.playerDamage)
