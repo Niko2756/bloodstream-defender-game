@@ -193,8 +193,7 @@ private struct Constants {
         MissionDefinition(name: "Filovirus Ribbon", term: "Filovirus", target: "virions", isEncounter: true, bossKind: .filovirus, bossTarget: "filovirus boss"),
         MissionDefinition(name: "Rotavirus Gyre", term: "Rotavirus", target: "virions", isEncounter: true, bossKind: .rotavirus, bossTarget: "rotavirus gyre"),
         MissionDefinition(name: "Lyssavirus Lance", term: "Rabies lyssavirus", target: "virions", isEncounter: true, bossKind: .lyssavirus, bossTarget: "lyssavirus lance"),
-        MissionDefinition(name: "Norovirus Swarm-Core", term: "Norovirus", target: "virions", isEncounter: true, bossKind: .norovirus, bossTarget: "norovirus swarm-core"),
-        MissionDefinition(name: "Adenovirus Prism", term: "Adenovirus", target: "virions", isEncounter: true, bossKind: .adenovirus, bossTarget: "adenovirus mini-boss")
+        MissionDefinition(name: "Norovirus Swarm-Core", term: "Norovirus", target: "virions", isEncounter: true, bossKind: .norovirus, bossTarget: "norovirus swarm-core")
     ]
     static let upgrades = [
         UpgradeDefinition(
