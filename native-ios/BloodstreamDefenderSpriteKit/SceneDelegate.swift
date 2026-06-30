@@ -3,6 +3,10 @@ import UIKit
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
+    private var gameViewController: GameViewController? {
+        window?.rootViewController as? GameViewController
+    }
+
     func scene(
         _ scene: UIScene,
         willConnectTo session: UISceneSession,
@@ -17,5 +21,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.makeKeyAndVisible()
         self.window = window
     }
-}
 
+    func sceneWillResignActive(_ scene: UIScene) {
+        gameViewController?.applicationWillResignActive()
+    }
+
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        gameViewController?.applicationDidEnterBackground()
+    }
+
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        gameViewController?.applicationWillEnterForeground()
+    }
+}

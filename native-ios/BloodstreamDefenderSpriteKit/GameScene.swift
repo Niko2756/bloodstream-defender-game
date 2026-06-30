@@ -129,6 +129,7 @@ private struct Constants {
     static let sparkNodeName = "pooledSpark"
     static let tiltCalibrationToastActionKey = "tiltCalibrationToast"
     static let tiltCalibrateButtonResetActionKey = "tiltCalibrateButtonReset"
+    static let runRestoreToastActionKey = "runRestoreToast"
     static let tiltSensitivitySliderWidth: CGFloat = 350
     static let tiltSensitivitySliderLeftX: CGFloat = 465
     static let tiltSensitivitySliderY: CGFloat = 446
@@ -426,6 +427,44 @@ private struct RunRecord {
     }
 }
 
+private enum RunCheckpointMode: String, Codable {
+    case paused
+    case levelComplete
+    case upgrade
+}
+
+private struct RunCheckpoint: Codable {
+    let version: Int
+    let mode: RunCheckpointMode
+    let level: Int
+    let score: Int
+    let sectionsCleared: Int
+    let totalKills: Int
+    let bossesNeutralized: Int
+    let runTime: TimeInterval
+    let levelClearTimer: TimeInterval
+    let levelKills: Int
+    let scroll: Double
+    let playerX: Double
+    let playerY: Double
+    let playerHealth: Double
+    let rapidRank: Int
+    let pulseRank: Int
+    let dashRank: Int
+    let dangerMusicActive: Bool
+    let bossDangerMusicSuppressed: Bool
+    let bossTriggerProgress: Double
+    let bossWarningStarted: Bool
+    let bossWarningTimer: TimeInterval
+    let bossClearTimer: TimeInterval
+    let bossSpawned: Bool
+    let bossDefeated: Bool
+    let bossHP: Double
+    let bossX: Double
+    let bossY: Double
+    let savedAt: TimeInterval
+}
+
 private enum HapticCue {
     case selection
     case lightImpact
@@ -709,9 +748,12 @@ private final class PlayerProfileStore {
         static let hapticsMuted = "bloodstream.spritekit.settings.hapticsMuted"
         static let tiltEnabled = "bloodstream.spritekit.settings.tiltEnabled"
         static let tiltSensitivity = "bloodstream.spritekit.settings.tiltSensitivity"
+        static let runCheckpoint = "bloodstream.spritekit.runCheckpoint"
     }
 
     private let defaults: UserDefaults
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -767,6 +809,27 @@ private final class PlayerProfileStore {
         set {
             defaults.set(Double(clamp(newValue, Constants.tiltSensitivityMin, Constants.tiltSensitivityMax)), forKey: Key.tiltSensitivity)
         }
+    }
+
+    var runCheckpoint: RunCheckpoint? {
+        get {
+            guard let data = defaults.data(forKey: Key.runCheckpoint) else {
+                return nil
+            }
+            return try? decoder.decode(RunCheckpoint.self, from: data)
+        }
+        set {
+            guard let newValue,
+                  let data = try? encoder.encode(newValue) else {
+                defaults.removeObject(forKey: Key.runCheckpoint)
+                return
+            }
+            defaults.set(data, forKey: Key.runCheckpoint)
+        }
+    }
+
+    func clearRunCheckpoint() {
+        defaults.removeObject(forKey: Key.runCheckpoint)
     }
 
     @discardableResult
@@ -1164,6 +1227,9 @@ final class GameScene: SKScene {
     private var tiltCalibrationToast = SKNode()
     private var tiltCalibrationToastFrame: SKShapeNode?
     private var tiltCalibrationToastLabel: SKLabelNode?
+    private var runRestoreToast = SKNode()
+    private var runRestoreToastFrame: SKShapeNode?
+    private var runRestoreToastLabel: SKLabelNode?
     private var restartConfirmOverlay = SKNode()
     private var restartConfirmButton = SKShapeNode()
     private var restartCancelButton = SKShapeNode()
@@ -1209,12 +1275,43 @@ final class GameScene: SKScene {
         setupOverlays()
         applySavedProfileSettings()
         configureGameCenter()
-        showTitle()
+        if !restoreRunCheckpointIfAvailable() {
+            showTitle()
+        }
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         relayoutStage()
+    }
+
+    func applicationWillResignActive() {
+        pauseAndCheckpointForLifecycle()
+    }
+
+    func applicationDidEnterBackground() {
+        pauseAndCheckpointForLifecycle()
+    }
+
+    func applicationWillEnterForeground() {
+        lastUpdateTime = 0
+        pressedKeys.removeAll()
+        joystickTouchId = nil
+        tiltSensitivityTouchId = nil
+        fireTouchIds.removeAll()
+        joystickVector = .zero
+        updateJoystickVisual()
+
+        if mode == .paused {
+            audio.pauseMusic()
+            audio.stopAmbience()
+            pauseBossWarningSFX()
+        } else {
+            playDesiredMusic()
+            if shouldPlayVeinAmbience() {
+                audio.playAmbience()
+            }
+        }
     }
 
     func setKey(_ keyCode: UIKeyboardHIDUsage, isPressed: Bool) {
@@ -1912,6 +2009,7 @@ final class GameScene: SKScene {
         setupLevelCompleteOverlay()
         setupUpgradeOverlay()
         setupGameOverOverlay()
+        setupRunRestoreToast()
     }
 
     private func setupTitleOverlay() {
@@ -2320,6 +2418,37 @@ final class GameScene: SKScene {
         restartConfirmOverlay.isHidden = true
     }
 
+    private func setupRunRestoreToast() {
+        runRestoreToast.removeAllChildren()
+        runRestoreToast.removeAllActions()
+        runRestoreToast.position = baseToStage(CGPoint(x: 640, y: 360))
+        runRestoreToast.zPosition = ZLayer.overlay + 96
+        runRestoreToast.alpha = 0
+        runRestoreToast.isHidden = true
+        runRestoreToast.setScale(1.0)
+
+        let frame = SKShapeNode(rectOf: CGSize(width: 286, height: 66), cornerRadius: 18)
+        frame.fillColor = UIColor(red: 0.02, green: 0.0, blue: 0.03, alpha: 0.94)
+        frame.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.95)
+        frame.lineWidth = 2.5
+        frame.glowWidth = 7
+        runRestoreToast.addChild(frame)
+        runRestoreToastFrame = frame
+
+        let accent = SKShapeNode(rectOf: CGSize(width: 236, height: 2.5), cornerRadius: 1.25)
+        accent.fillColor = UIColor(red: 1.0, green: 0.72, blue: 0.28, alpha: 0.92)
+        accent.strokeColor = .clear
+        accent.position = CGPoint(x: 0, y: -23)
+        runRestoreToast.addChild(accent)
+
+        let text = label("RUN RESTORED", size: 21, color: UIColor(red: 1.0, green: 0.96, blue: 0.78, alpha: 1.0))
+        text.position = CGPoint(x: 0, y: 3)
+        runRestoreToast.addChild(text)
+        runRestoreToastLabel = text
+
+        overlayNode.addChild(runRestoreToast)
+    }
+
     private func setupLevelCompleteOverlay() {
         levelCompleteOverlay.removeAllChildren()
         levelCompleteOverlay.addChild(overlayShade(alpha: 0.56))
@@ -2609,7 +2738,33 @@ final class GameScene: SKScene {
         ]))
     }
 
+    private func showRunRestoreToast() {
+        runRestoreToast.removeAction(forKey: Constants.runRestoreToastActionKey)
+        runRestoreToastFrame?.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.95)
+        runRestoreToastLabel?.text = "RUN RESTORED"
+        runRestoreToast.position = baseToStage(CGPoint(x: 640, y: 360))
+        runRestoreToast.isHidden = false
+        runRestoreToast.alpha = 0
+        runRestoreToast.setScale(0.92)
+        runRestoreToast.run(.sequence([
+            .group([
+                .fadeIn(withDuration: 0.14),
+                .scale(to: 1.0, duration: 0.14)
+            ]),
+            .wait(forDuration: 1.6),
+            .group([
+                .fadeOut(withDuration: 0.35),
+                .scale(to: 1.04, duration: 0.35)
+            ]),
+            .run { [weak self] in
+                self?.runRestoreToast.isHidden = true
+                self?.runRestoreToast.setScale(1.0)
+            }
+        ]), withKey: Constants.runRestoreToastActionKey)
+    }
+
     private func showTitle() {
+        profileStore.clearRunCheckpoint()
         mode = .title
         updateTitleBestRunLabel()
         titleGroup.isHidden = false
@@ -2630,6 +2785,7 @@ final class GameScene: SKScene {
     }
 
     private func startRun() {
+        profileStore.clearRunCheckpoint()
         clearRunEntities(resetEnemyIds: true)
         player = PlayerState()
         player.invulnerable = 4.0
@@ -2677,6 +2833,7 @@ final class GameScene: SKScene {
         stopBossEncounterSFX()
         audio.playMusic(.combat)
         audio.playAmbience()
+        saveRunCheckpoint()
     }
 
     private func startNextLevel() {
@@ -2715,6 +2872,7 @@ final class GameScene: SKScene {
         stopBossEncounterSFX()
         playDesiredMusic()
         audio.playAmbience()
+        saveRunCheckpoint()
     }
 
     private func loadLevel(_ nextLevel: Int, clearEntities: Bool) {
@@ -2730,7 +2888,7 @@ final class GameScene: SKScene {
         let difficulty = difficultyMultiplier(for: level)
         let baseLength = 2200 + CGFloat(level) * (activeMission.isEncounter ? 560 : 520)
         levelLength = round(baseLength * (1 + max(0, difficulty - 1) * 0.18))
-        levelGoal = min(85, Int(ceil((3 + CGFloat(level) * 2) * difficulty)))
+        levelGoal = levelTargetGoal(for: level)
         spawnEnemyTimer = level == 1 ? 0.9 : 0.15
         spawnRedTimer = 0.25
         spawnPlateletTimer = TimeInterval.random(in: 1.15...2.1)
@@ -2751,6 +2909,206 @@ final class GameScene: SKScene {
         updateBackground()
     }
 
+    private func pauseAndCheckpointForLifecycle() {
+        guard activeCheckpointMode() != nil else {
+            audio.pauseMusic()
+            audio.stopAmbience()
+            pauseBossWarningSFX()
+            return
+        }
+
+        if mode == .running {
+            enterPausedState(playOpeningSFX: false)
+        } else {
+            joystickTouchId = nil
+            tiltSensitivityTouchId = nil
+            joystickVector = .zero
+            fireTouchIds.removeAll()
+            clearScreenShake()
+            updateJoystickVisual()
+            pauseBossWarningSFX()
+            audio.pauseMusic()
+            audio.stopAmbience()
+            saveRunCheckpoint()
+        }
+    }
+
+    private func activeCheckpointMode() -> RunCheckpointMode? {
+        switch mode {
+        case .running, .paused:
+            return .paused
+        case .levelComplete:
+            return .levelComplete
+        case .upgrade:
+            return .upgrade
+        case .title, .gameOver:
+            return nil
+        }
+    }
+
+    private func saveRunCheckpoint() {
+        guard let checkpointMode = activeCheckpointMode() else {
+            return
+        }
+
+        let boss = activeBoss()
+        let checkpoint = RunCheckpoint(
+            version: 1,
+            mode: checkpointMode,
+            level: level,
+            score: score,
+            sectionsCleared: sectionsCleared,
+            totalKills: totalKills,
+            bossesNeutralized: bossesNeutralized,
+            runTime: runTime,
+            levelClearTimer: levelClearTimer,
+            levelKills: levelKills,
+            scroll: Double(scroll),
+            playerX: Double(player.position.x),
+            playerY: Double(player.position.y),
+            playerHealth: Double(player.health),
+            rapidRank: rapidRank,
+            pulseRank: pulseRank,
+            dashRank: dashRank,
+            dangerMusicActive: dangerMusicActive,
+            bossDangerMusicSuppressed: bossDangerMusicSuppressed,
+            bossTriggerProgress: Double(bossTriggerProgress),
+            bossWarningStarted: bossWarningStarted,
+            bossWarningTimer: bossWarningTimer,
+            bossClearTimer: bossClearTimer,
+            bossSpawned: bossSpawned,
+            bossDefeated: bossDefeated,
+            bossHP: Double(boss?.hp ?? 0),
+            bossX: Double(boss?.position.x ?? Constants.baseSize.width * 0.74),
+            bossY: Double(boss?.position.y ?? Constants.baseSize.height * 0.5),
+            savedAt: Date().timeIntervalSince1970
+        )
+        profileStore.runCheckpoint = checkpoint
+    }
+
+    private func restoreRunCheckpointIfAvailable() -> Bool {
+        guard let checkpoint = profileStore.runCheckpoint else {
+            return false
+        }
+        guard checkpoint.version == 1, checkpoint.level >= 1 else {
+            profileStore.clearRunCheckpoint()
+            return false
+        }
+
+        clearRunEntities(resetEnemyIds: true)
+        player = PlayerState()
+        player.position = CGPoint(
+            x: clamp(CGFloat(checkpoint.playerX), 60, Constants.baseSize.width - 90),
+            y: clamp(CGFloat(checkpoint.playerY), 90, Constants.baseSize.height - 80)
+        )
+        player.velocity = .zero
+        player.health = clamp(CGFloat(checkpoint.playerHealth), 1, Constants.playerMaxHealth)
+        player.invulnerable = 1.6
+        score = max(0, checkpoint.score)
+        sectionsCleared = max(0, checkpoint.sectionsCleared)
+        totalKills = max(0, checkpoint.totalKills)
+        bossesNeutralized = max(0, checkpoint.bossesNeutralized)
+        runTime = max(0, checkpoint.runTime)
+        rapidRank = checkpoint.rapidRank.clamped(to: 0...Constants.maxUpgradeRank)
+        pulseRank = checkpoint.pulseRank.clamped(to: 0...Constants.maxUpgradeRank)
+        dashRank = checkpoint.dashRank.clamped(to: 0...Constants.maxUpgradeRank)
+        lastRunWasBest = false
+        levelClearTimer = 0
+        bossHitFeedbackTimer = 0
+        pendingMusicCue = nil
+        pendingMusicTimer = 0
+        dangerMusicActive = checkpoint.dangerMusicActive || player.health <= Constants.playerMaxHealth * Constants.dangerMusicThreshold
+        bossDangerMusicSuppressed = checkpoint.bossDangerMusicSuppressed
+        dashInputHeld = false
+        horizontalSwimSoundInput = 0
+        dashTrailTimer = 0
+        swimWakeTimer = 0
+        lastFacing = CGVector(dx: 1, dy: 0)
+        tiltVector = .zero
+        lockTargetId = nil
+        joystickVector = .zero
+        fireTouchIds.removeAll()
+        pressedKeys.removeAll()
+        clearScreenShake()
+
+        titleGroup.isHidden = true
+        pauseOverlay.isHidden = true
+        closePauseSubmenus()
+        levelCompleteOverlay.isHidden = true
+        upgradeOverlay.isHidden = true
+        gameOverOverlay.isHidden = true
+        restartConfirmVisible = false
+        restartConfirmOverlay.isHidden = true
+        hudNode.isHidden = false
+        controlsNode.isHidden = false
+        playerNode?.isHidden = false
+
+        loadLevel(checkpoint.level, clearEntities: false)
+        levelClearTimer = checkpoint.mode == .paused ? max(0, checkpoint.levelClearTimer) : 0
+        levelKills = min(max(0, checkpoint.levelKills), levelGoal)
+        scroll = clamp(CGFloat(checkpoint.scroll), 0, max(0, levelLength - 1))
+        bossTriggerProgress = clamp(CGFloat(checkpoint.bossTriggerProgress), 0.1, 0.98)
+        bossDefeated = checkpoint.bossDefeated
+
+        if activeMission.isEncounter, checkpoint.bossSpawned, !checkpoint.bossDefeated {
+            bossWarningStarted = true
+            bossWarningTimer = 0
+            bossClearTimer = 0
+            spawnBoss(
+                restoredHealth: CGFloat(checkpoint.bossHP),
+                restoredPosition: CGPoint(
+                    x: clamp(CGFloat(checkpoint.bossX), visibleBaseMinX() + 180, visibleBaseMaxX() + 220),
+                    y: clamp(CGFloat(checkpoint.bossY), 120, Constants.baseSize.height - 110)
+                )
+            )
+        } else if activeMission.isEncounter, checkpoint.bossWarningStarted, !checkpoint.bossSpawned {
+            bossWarningStarted = false
+            bossWarningTimer = 0
+            bossClearTimer = 0
+            bossSpawned = false
+            scroll = max(scroll, levelLength * bossTriggerProgress)
+        } else {
+            bossWarningStarted = checkpoint.bossWarningStarted
+            bossWarningTimer = min(max(0, checkpoint.bossWarningTimer), Constants.bossWarningDuration)
+            bossClearTimer = min(max(0, checkpoint.bossClearTimer), Constants.bossPreClearDuration)
+            bossSpawned = checkpoint.bossSpawned
+        }
+
+        playerNode?.position = baseToStage(player.position)
+        playerNode?.zRotation = 0
+        updateBackground()
+        updateJoystickVisual()
+        updateHUD()
+        updateAbilityControls()
+        stopBossEncounterSFX()
+        audio.stopAmbience()
+
+        switch checkpoint.mode {
+        case .paused:
+            mode = .paused
+            controlsNode.isHidden = false
+            pauseOverlay.isHidden = false
+            updatePauseToggleLabels()
+            audio.pauseMusic()
+        case .levelComplete:
+            mode = .levelComplete
+            controlsNode.isHidden = true
+            updateLevelCompleteOverlay()
+            levelCompleteOverlay.isHidden = false
+            playDesiredMusic()
+        case .upgrade:
+            mode = .upgrade
+            controlsNode.isHidden = true
+            updateUpgradeOverlay()
+            upgradeOverlay.isHidden = false
+            playDesiredMusic()
+        }
+
+        showRunRestoreToast()
+        saveRunCheckpoint()
+        return true
+    }
+
     private func mission(for value: Int) -> MissionDefinition {
         if value <= Constants.missions.count {
             return Constants.missions[value - 1]
@@ -2765,6 +3123,12 @@ final class GameScene: SKScene {
             return 1
         }
         return pow(1.2, pressureLevel - 4)
+    }
+
+    private func levelTargetGoal(for measuredLevel: Int) -> Int {
+        let levelOffset = max(0, CGFloat(measuredLevel - 1))
+        let rawGoal = 5 + levelOffset * 4 + pow(levelOffset, 1.5) * 0.5
+        return min(85, Int(ceil(rawGoal)))
     }
 
     private func difficultyPressureLevel(for measuredLevel: Int? = nil) -> CGFloat {
@@ -3134,34 +3498,48 @@ final class GameScene: SKScene {
             return
         }
         if mode == .running {
-            mode = .paused
-            pauseOverlay.isHidden = false
-            closePauseSubmenus()
-            restartConfirmVisible = false
-            restartConfirmOverlay.isHidden = true
-            joystickVector = .zero
-            fireTouchIds.removeAll()
-            clearScreenShake()
-            updateJoystickVisual()
-            resetTiltCalibrationFeedback()
-            updatePauseToggleLabels()
-            pauseBossWarningSFX()
-            audio.playSFX(.pauseOpen)
-            audio.pauseMusic()
-            audio.stopAmbience()
+            enterPausedState(playOpeningSFX: true)
         } else {
-            mode = .running
-            pauseOverlay.isHidden = true
-            closePauseSubmenus()
-            restartConfirmVisible = false
-            restartConfirmOverlay.isHidden = true
-            resetTiltCalibrationFeedback()
-            audio.resumeMusic()
-            if shouldPlayVeinAmbience() {
-                audio.playAmbience()
-            }
-            resumeBossWarningSFXIfNeeded()
+            resumePausedRun()
         }
+    }
+
+    private func enterPausedState(playOpeningSFX: Bool) {
+        mode = .paused
+        pauseOverlay.isHidden = false
+        closePauseSubmenus()
+        restartConfirmVisible = false
+        restartConfirmOverlay.isHidden = true
+        joystickTouchId = nil
+        tiltSensitivityTouchId = nil
+        joystickVector = .zero
+        fireTouchIds.removeAll()
+        clearScreenShake()
+        updateJoystickVisual()
+        resetTiltCalibrationFeedback()
+        updatePauseToggleLabels()
+        pauseBossWarningSFX()
+        if playOpeningSFX {
+            audio.playSFX(.pauseOpen)
+        }
+        audio.pauseMusic()
+        audio.stopAmbience()
+        saveRunCheckpoint()
+    }
+
+    private func resumePausedRun() {
+        mode = .running
+        pauseOverlay.isHidden = true
+        closePauseSubmenus()
+        restartConfirmVisible = false
+        restartConfirmOverlay.isHidden = true
+        resetTiltCalibrationFeedback()
+        audio.resumeMusic()
+        if shouldPlayVeinAmbience() {
+            audio.playAmbience()
+        }
+        resumeBossWarningSFXIfNeeded()
+        saveRunCheckpoint()
     }
 
     private func showTiltCalibrationFeedback(success: Bool) {
@@ -3216,6 +3594,7 @@ final class GameScene: SKScene {
     }
 
     private func endRun() {
+        profileStore.clearRunCheckpoint()
         mode = .gameOver
         let finalRecord = currentRunRecord()
         lastRunWasBest = profileStore.recordRun(finalRecord)
@@ -3409,7 +3788,7 @@ final class GameScene: SKScene {
         }
     }
 
-    private func spawnBoss() {
+    private func spawnBoss(restoredHealth: CGFloat? = nil, restoredPosition: CGPoint? = nil) {
         guard let bossKind = activeMission.bossKind,
               let profile = bossProfile(for: bossKind),
               !bossSpawned else {
@@ -3421,12 +3800,14 @@ final class GameScene: SKScene {
         let difficulty = difficultyMultiplier()
         bossDangerMusicSuppressed = dangerMusicActive
         let hpScale = 1 + max(0, difficulty - 1) * 0.9
+        let maxHP = profile.hp * hpScale
         let frame = profile.frames[0]
         let visualSize = CGSize(width: frame.rect.width * profile.visualScale, height: frame.rect.height * profile.visualScale)
-        let position = CGPoint(
+        let defaultPosition = CGPoint(
             x: offscreenRightSpawnX(forVisualWidth: visualSize.width, grace: 64),
             y: Constants.baseSize.height * 0.48
         )
+        let position = restoredPosition ?? defaultPosition
         let node = SKSpriteNode(texture: regionTexture(from: profile.texture, frame: frame))
         node.size = visualSize
         node.position = baseToStage(position)
@@ -3441,7 +3822,7 @@ final class GameScene: SKScene {
             velocity: CGVector(dx: -54, dy: 0),
             baseSpeed: 54,
             radius: profile.radius,
-            hp: profile.hp * hpScale,
+            hp: clamp(restoredHealth ?? maxHP, 1, maxHP),
             score: Int(round(CGFloat(profile.score) * difficulty)),
             damage: profile.damage,
             bossKind: bossKind,
@@ -4913,6 +5294,7 @@ final class GameScene: SKScene {
         gameOverOverlay.isHidden = true
         updateLevelCompleteOverlay()
         levelCompleteOverlay.isHidden = false
+        saveRunCheckpoint()
     }
 
     private func openUpgradeScreenOrContinue() {
@@ -4935,6 +5317,7 @@ final class GameScene: SKScene {
         upgradeOverlay.isHidden = false
         audio.stopAmbience()
         playDesiredMusic()
+        saveRunCheckpoint()
     }
 
     private func selectUpgrade(_ choice: UpgradeChoice) {

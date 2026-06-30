@@ -41,6 +41,18 @@ final class GameViewController: UIViewController {
         .landscape
     }
 
+    func applicationWillResignActive() {
+        gameScene?.applicationWillResignActive()
+    }
+
+    func applicationDidEnterBackground() {
+        gameScene?.applicationDidEnterBackground()
+    }
+
+    func applicationWillEnterForeground() {
+        gameScene?.applicationWillEnterForeground()
+    }
+
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var handled = false
         for press in presses {
