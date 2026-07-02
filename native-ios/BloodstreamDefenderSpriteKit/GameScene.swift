@@ -5,6 +5,22 @@ import GameKit
 import SpriteKit
 import UIKit
 
+struct CombatAbilityControlState: Equatable {
+    let isVisible: Bool
+    let dashTitle: String
+    let dashEnabled: Bool
+    let dashReady: Bool
+    let dashUnlocked: Bool
+    let pulseTitle: String
+    let pulseEnabled: Bool
+    let pulseReady: Bool
+    let pulseUnlocked: Bool
+}
+
+protocol GameSceneCombatControlsDelegate: AnyObject {
+    func gameScene(_ scene: GameScene, didUpdateCombatAbilityControls state: CombatAbilityControlState)
+}
+
 private enum GameMode {
     case title
     case running
@@ -748,6 +764,7 @@ private final class PlayerProfileStore {
         static let hapticsMuted = "bloodstream.spritekit.settings.hapticsMuted"
         static let tiltEnabled = "bloodstream.spritekit.settings.tiltEnabled"
         static let tiltSensitivity = "bloodstream.spritekit.settings.tiltSensitivity"
+        static let prefersGlassCombatAbilityControls = "bloodstream.spritekit.settings.prefersGlassCombatAbilityControls"
         static let runCheckpoint = "bloodstream.spritekit.runCheckpoint"
     }
 
@@ -809,6 +826,16 @@ private final class PlayerProfileStore {
         set {
             defaults.set(Double(clamp(newValue, Constants.tiltSensitivityMin, Constants.tiltSensitivityMax)), forKey: Key.tiltSensitivity)
         }
+    }
+
+    var prefersGlassCombatAbilityControls: Bool {
+        get {
+            guard defaults.object(forKey: Key.prefersGlassCombatAbilityControls) != nil else {
+                return true
+            }
+            return defaults.bool(forKey: Key.prefersGlassCombatAbilityControls)
+        }
+        set { defaults.set(newValue, forKey: Key.prefersGlassCombatAbilityControls) }
     }
 
     var runCheckpoint: RunCheckpoint? {
@@ -1203,6 +1230,7 @@ final class GameScene: SKScene {
     private var hapticsToggleButton = SKShapeNode()
     private var inputSettingsButton = SKShapeNode()
     private var howToPlayButton = SKShapeNode()
+    private var combatAbilityStyleButton = SKShapeNode()
     private var tiltToggleButton = SKShapeNode()
     private var tiltCalibrateButton = SKShapeNode()
     private var audioSettingsLabel: SKLabelNode?
@@ -1211,6 +1239,7 @@ final class GameScene: SKScene {
     private var hapticsToggleLabel: SKLabelNode?
     private var inputSettingsLabel: SKLabelNode?
     private var howToPlayLabel: SKLabelNode?
+    private var combatAbilityStyleLabel: SKLabelNode?
     private var tiltToggleLabel: SKLabelNode?
     private var tiltCalibrateLabel: SKLabelNode?
     private var audioSettingsOverlay = SKNode()
@@ -1256,6 +1285,10 @@ final class GameScene: SKScene {
     private var pulseButton = SKShapeNode()
     private var dashLabel: SKLabelNode?
     private var pulseLabel: SKLabelNode?
+    weak var combatControlsDelegate: GameSceneCombatControlsDelegate?
+    private var nativeCombatAbilityControlsAvailable = false
+    private var prefersGlassCombatAbilityControls = true
+    private var lastPublishedCombatAbilityControlState: CombatAbilityControlState?
 
     deinit {
         motionManager.stopDeviceMotionUpdates()
@@ -1278,6 +1311,7 @@ final class GameScene: SKScene {
         if !restoreRunCheckpointIfAvailable() {
             showTitle()
         }
+        publishCombatAbilityControlState(force: true)
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
@@ -1312,6 +1346,27 @@ final class GameScene: SKScene {
                 audio.playAmbience()
             }
         }
+    }
+
+    private var shouldUseNativeCombatAbilityControls: Bool {
+        nativeCombatAbilityControlsAvailable && prefersGlassCombatAbilityControls
+    }
+
+    func setNativeCombatAbilityControlsAvailable(_ available: Bool) {
+        nativeCombatAbilityControlsAvailable = available
+        applyNativeAbilityControlVisibility()
+        updatePauseToggleLabels()
+        publishCombatAbilityControlState(force: true)
+    }
+
+    func performNativeDashButtonPress() {
+        triggerDash(input: currentMovementVector())
+        updateAbilityControls()
+    }
+
+    func performNativePulseButtonPress() {
+        triggerPulse()
+        updateAbilityControls()
     }
 
     func setKey(_ keyCode: UIKeyboardHIDUsage, isPressed: Bool) {
@@ -1493,6 +1548,9 @@ final class GameScene: SKScene {
                     if inputSettingsBackButton.contains(stagePoint) {
                         playUITap()
                         closeInputSettings()
+                    } else if combatAbilityStyleButton.contains(stagePoint) {
+                        toggleCombatAbilityControlStyle()
+                        playUITap()
                     } else if tiltToggleButton.contains(stagePoint) {
                         toggleTiltMode()
                         playUITap()
@@ -1575,9 +1633,9 @@ final class GameScene: SKScene {
             } else if !tiltEnabled && distance(basePoint, Constants.joystickCenter) <= Constants.joystickTouchRadius {
                 joystickTouchId = touchId
                 updateJoystick(with: basePoint)
-            } else if dashButton.contains(stagePoint) {
+            } else if !shouldUseNativeCombatAbilityControls && dashButton.contains(stagePoint) {
                 triggerDash(input: currentMovementVector())
-            } else if pulseButton.contains(stagePoint) {
+            } else if !shouldUseNativeCombatAbilityControls && pulseButton.contains(stagePoint) {
                 triggerPulse()
             } else {
                 fireTouchIds.insert(touchId)
@@ -1936,6 +1994,7 @@ final class GameScene: SKScene {
         controlsNode.addChild(pulseLabel)
         self.pulseLabel = pulseLabel
 
+        applyNativeAbilityControlVisibility()
         controlsNode.isHidden = true
     }
 
@@ -2230,6 +2289,10 @@ final class GameScene: SKScene {
 
         let back = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 458, y: 314), size: CGSize(width: 142, height: 50), title: "Back", fontSize: 15)
         inputSettingsBackButton = back.shape
+
+        let abilityStyle = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 690, y: 314), size: CGSize(width: 276, height: 50), title: "Ability UI: Glass", fontSize: 15)
+        combatAbilityStyleButton = abilityStyle.shape
+        combatAbilityStyleLabel = abilityStyle.label
 
         let tilt = addArtButton(to: inputSettingsOverlay, center: CGPoint(x: 574, y: 370), size: CGSize(width: 166, height: 50), title: "Tilt: Off", fontSize: 15)
         tiltToggleButton = tilt.shape
@@ -2782,6 +2845,7 @@ final class GameScene: SKScene {
         stopBossEncounterSFX()
         audio.playMusic(.menu)
         audio.stopAmbience()
+        publishCombatAbilityControlState()
     }
 
     private func startRun() {
@@ -2834,6 +2898,7 @@ final class GameScene: SKScene {
         audio.playMusic(.combat)
         audio.playAmbience()
         saveRunCheckpoint()
+        publishCombatAbilityControlState(force: true)
     }
 
     private func startNextLevel() {
@@ -2873,6 +2938,7 @@ final class GameScene: SKScene {
         playDesiredMusic()
         audio.playAmbience()
         saveRunCheckpoint()
+        publishCombatAbilityControlState(force: true)
     }
 
     private func loadLevel(_ nextLevel: Int, clearEntities: Bool) {
@@ -3106,6 +3172,7 @@ final class GameScene: SKScene {
 
         showRunRestoreToast()
         saveRunCheckpoint()
+        publishCombatAbilityControlState(force: true)
         return true
     }
 
@@ -3525,6 +3592,7 @@ final class GameScene: SKScene {
         audio.pauseMusic()
         audio.stopAmbience()
         saveRunCheckpoint()
+        publishCombatAbilityControlState()
     }
 
     private func resumePausedRun() {
@@ -3540,6 +3608,7 @@ final class GameScene: SKScene {
         }
         resumeBossWarningSFXIfNeeded()
         saveRunCheckpoint()
+        publishCombatAbilityControlState()
     }
 
     private func showTiltCalibrationFeedback(success: Bool) {
@@ -3620,6 +3689,7 @@ final class GameScene: SKScene {
         audio.stopMusic()
         audio.stopAmbience()
         audio.playSFX(.playerDeath)
+        publishCombatAbilityControlState()
     }
 
     private func currentRunRecord() -> RunRecord {
@@ -5295,6 +5365,7 @@ final class GameScene: SKScene {
         updateLevelCompleteOverlay()
         levelCompleteOverlay.isHidden = false
         saveRunCheckpoint()
+        publishCombatAbilityControlState()
     }
 
     private func openUpgradeScreenOrContinue() {
@@ -5318,6 +5389,7 @@ final class GameScene: SKScene {
         audio.stopAmbience()
         playDesiredMusic()
         saveRunCheckpoint()
+        publishCombatAbilityControlState()
     }
 
     private func selectUpgrade(_ choice: UpgradeChoice) {
@@ -5508,10 +5580,13 @@ final class GameScene: SKScene {
         sfxMuted = profileStore.sfxMuted
         hapticsMuted = profileStore.hapticsMuted
         tiltSensitivity = profileStore.tiltSensitivity
+        prefersGlassCombatAbilityControls = profileStore.prefersGlassCombatAbilityControls
         audio.setMusicMuted(musicMuted)
         audio.setSFXMuted(sfxMuted)
         haptics.setMuted(hapticsMuted)
         setTiltEnabled(profileStore.tiltEnabled, showBannerText: false)
+        applyNativeAbilityControlVisibility()
+        publishCombatAbilityControlState(force: true)
         updatePauseToggleLabels()
         updateTitleBestRunLabel()
         updateTiltSensitivitySlider()
@@ -5850,6 +5925,18 @@ final class GameScene: SKScene {
         updatePauseToggleLabels()
     }
 
+    private func setPrefersGlassCombatAbilityControls(_ value: Bool) {
+        prefersGlassCombatAbilityControls = value
+        profileStore.prefersGlassCombatAbilityControls = value
+        applyNativeAbilityControlVisibility()
+        updatePauseToggleLabels()
+        publishCombatAbilityControlState(force: true)
+    }
+
+    private func toggleCombatAbilityControlStyle() {
+        setPrefersGlassCombatAbilityControls(!prefersGlassCombatAbilityControls)
+    }
+
     private func setTiltSensitivity(_ value: CGFloat) {
         tiltSensitivity = clamp(value, Constants.tiltSensitivityMin, Constants.tiltSensitivityMax)
         profileStore.tiltSensitivity = tiltSensitivity
@@ -5931,6 +6018,7 @@ final class GameScene: SKScene {
         hapticsToggleLabel?.text = hapticsMuted ? "Haptics: Off" : "Haptics: On"
         inputSettingsLabel?.text = "Input Settings"
         howToPlayLabel?.text = "How to Play"
+        combatAbilityStyleLabel?.text = shouldUseNativeCombatAbilityControls ? "Ability UI: Glass" : "Ability UI: Classic"
         tiltToggleLabel?.text = tiltEnabled ? "Tilt: On" : "Tilt: Off"
         tiltCalibrateLabel?.text = "Calibrate"
     }
@@ -6485,6 +6573,63 @@ final class GameScene: SKScene {
             pulseLabel?.text = String(format: "%.1fs", player.pulseCooldown)
             pulseLabel?.fontColor = UIColor(red: 0.72, green: 1.0, blue: 1.0, alpha: 0.90)
         }
+
+        applyNativeAbilityControlVisibility()
+        publishCombatAbilityControlState()
+    }
+
+    private func applyNativeAbilityControlVisibility() {
+        dashButton.isHidden = shouldUseNativeCombatAbilityControls
+        dashLabel?.isHidden = shouldUseNativeCombatAbilityControls
+        pulseButton.isHidden = shouldUseNativeCombatAbilityControls
+        pulseLabel?.isHidden = shouldUseNativeCombatAbilityControls
+    }
+
+    private func publishCombatAbilityControlState(force: Bool = false) {
+        let state = currentCombatAbilityControlState()
+        guard force || state != lastPublishedCombatAbilityControlState else {
+            return
+        }
+        lastPublishedCombatAbilityControlState = state
+        combatControlsDelegate?.gameScene(self, didUpdateCombatAbilityControls: state)
+    }
+
+    private func currentCombatAbilityControlState() -> CombatAbilityControlState {
+        let dashUnlocked = dashRank > 0
+        let pulseUnlocked = pulseRank > 0
+        let dashReady = dashUnlocked && player.dashCooldown <= 0
+        let pulseReady = pulseUnlocked && player.pulseCooldown <= 0
+        let visible = shouldUseNativeCombatAbilityControls && mode == .running && !controlsNode.isHidden
+
+        let dashTitle: String
+        if !dashUnlocked {
+            dashTitle = "LOCKED"
+        } else if dashReady {
+            dashTitle = "DASH"
+        } else {
+            dashTitle = String(format: "%.1fs", player.dashCooldown)
+        }
+
+        let pulseTitle: String
+        if !pulseUnlocked {
+            pulseTitle = "LOCKED"
+        } else if pulseReady {
+            pulseTitle = "PULSE"
+        } else {
+            pulseTitle = String(format: "%.1fs", player.pulseCooldown)
+        }
+
+        return CombatAbilityControlState(
+            isVisible: visible,
+            dashTitle: dashTitle,
+            dashEnabled: visible && dashReady,
+            dashReady: dashReady,
+            dashUnlocked: dashUnlocked,
+            pulseTitle: pulseTitle,
+            pulseEnabled: visible && pulseReady,
+            pulseReady: pulseReady,
+            pulseUnlocked: pulseUnlocked
+        )
     }
 
     private func findLockTarget() -> Enemy? {
