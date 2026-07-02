@@ -116,7 +116,7 @@ private final class CombatGlassControlsOverlayView: UIView {
     private let baseSize = CGSize(width: 1280, height: 720)
     private let dashCenter = CGPoint(x: 1118, y: 535)
     private let pulseCenter = CGPoint(x: 1118, y: 633)
-    private let buttonSize = CGSize(width: 188, height: 86)
+    private let buttonSize = CGSize(width: 224, height: 86)
     private let buttonHostView = UIView()
     private let dashButton = GlassAbilityButton(accessibilityName: "Dash")
     private let pulseButton = GlassAbilityButton(accessibilityName: "Pulse")
@@ -219,6 +219,9 @@ private final class GlassAbilityButton: UIButton {
         accessibilityTraits = [.button]
         titleLabel?.adjustsFontSizeToFitWidth = true
         titleLabel?.minimumScaleFactor = 0.68
+        titleLabel?.numberOfLines = 1
+        titleLabel?.lineBreakMode = .byClipping
+        titleLabel?.allowsDefaultTighteningForTruncation = true
     }
 
     required init?(coder: NSCoder) {
@@ -260,11 +263,12 @@ private final class GlassAbilityButton: UIButton {
         nextConfiguration.buttonSize = .large
         nextConfiguration.cornerStyle = .capsule
         nextConfiguration.titleAlignment = .center
+        nextConfiguration.titleLineBreakMode = .byClipping
         nextConfiguration.contentInsets = NSDirectionalEdgeInsets(
             top: 0,
-            leading: max(16, 22 * currentScale),
+            leading: max(12, 18 * currentScale),
             bottom: 0,
-            trailing: max(16, 22 * currentScale)
+            trailing: max(12, 18 * currentScale)
         )
         nextConfiguration.baseForegroundColor = isReadyState
             ? UIColor(red: 1.0, green: 0.88, blue: 0.36, alpha: 1.0)
