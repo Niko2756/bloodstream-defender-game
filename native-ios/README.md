@@ -4,7 +4,7 @@ This folder contains the new native iOS/SpriteKit rebuild of Bloodstream Defende
 
 ## Maintenance status — October 1, 2026
 
-The working candidate is 1.1 (15). See the [renewed project review and release plan](../docs/maintenance-1.1-review-2026-10-01.md) and [automated resource/regression checks](scripts/README.md). The latest review built with Xcode 27 and tested on a separate iOS 27.0 simulator. The original vertical-slice notes below describe the port history. Current runtime Assets contain only referenced files; source art and alternates are preserved in `DevelopmentAssets` outside the app bundle.
+Version **1.1 (15)** is available for internal TestFlight testing after a signed Xcode 27 device archive, distribution export and resource audit. Availability was verified October 1, 2026 at approximately 15:47 UTC. See the [TestFlight release record](../docs/testflight-1.1-build-15-2026-10-01.md), [renewed project review and release plan](../docs/maintenance-1.1-review-2026-10-01.md), and [automated resource/regression checks](scripts/README.md). Simulator checks ran on iOS 27.0; physical-device and authenticated Game Center QA remain pending. No public App Store release was performed. The original vertical-slice notes below describe the port history. Current runtime Assets contain only referenced files; source art and alternates are preserved in `DevelopmentAssets` outside the app bundle.
 
 ## Project Structure
 
@@ -72,4 +72,4 @@ Full `xcodebuild` validation in that sandbox reached Swift compilation but faile
 - Complete physical-device audio, tilt, layout, and six-boss/late-run QA for the 1.1 candidate.
 - Verify the new independent Game Center maxima/retries with an authenticated account, and check legacy checkpoint compatibility before submission. Host regression tests cover offline state and account-change logic without live submissions.
 - Profile before deciding whether texture atlases, image resizing, or audio recompression are worthwhile.
-- Inspect the actual fresh archive/IPA and confirm App Store Connect version/build before an authorized submission. The existing export-options file has `destination=upload` and is not for local-only verification.
+- The signed archive and exported IPA for 1.1 (15) passed resource and signing checks before TestFlight upload. Repeat these checks for each new build, and complete beta QA before any separately authorized public release. The existing export-options file has `destination=upload` and is not for local-only verification.
