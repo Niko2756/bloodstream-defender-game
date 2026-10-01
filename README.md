@@ -9,9 +9,10 @@ This branch is focused on the native iOS rebuild. The older Godot project in the
 - Playable native SpriteKit rebuild for iPhone.
 - Active Xcode project: `native-ios/BloodstreamDefenderSpriteKit.xcodeproj`.
 - Bundle identifier: `com.niko.bloodstreamdefender.spritekit`.
-- Primary simulator target: iPhone 17 Pro.
+- Current maintenance QA target: a separate iPhone 18 Pro Simulator running stable iOS 27.0.
 - Deployment target: iOS 18.0.
-- App version: `1.0`.
+- Working maintenance candidate: `1.1` (build `15`); not submitted by the October 1 review.
+- [Renewed review, validation and release plan](docs/maintenance-1.1-review-2026-10-01.md).
 - Rendering stack: UIKit `SKView` plus SpriteKit scene.
 - Current milestone: polished native SpriteKit build with onboarding, Game Center hooks, haptics, input/audio settings, upgraded App Store icon assets, and six boss encounter profiles.
 
@@ -140,6 +141,6 @@ The root-level Godot files remain in the repo as reference material. They are no
 
 - Keep gameplay behavior intact when optimizing performance; prefer pooling and cosmetic budgets over reducing enemies, bullets, bosses, damage, or upgrades.
 - Generated UI assets should remain modular so labels and dynamic numbers stay live in SpriteKit.
-- Keep the approved `docs/screenshots/how-to-play.png` and `native-ios/BloodstreamDefenderSpriteKit/Assets/ui/how-to-play-imagegen-candidate-v3-controls.png` onboarding art available for App Store screenshot preparation.
+- Keep the approved `docs/screenshots/how-to-play.png` and `native-ios/DevelopmentAssets/BloodstreamDefenderSpriteKit/Assets/ui/how-to-play-imagegen-candidate-v3-controls.png` onboarding art available for App Store screenshot preparation.
 - Keep build products out of source control. Local folders such as `native-ios/DerivedData*/` and `native-ios/SwiftModuleCache/` are ignored.
 - The current visual target is a readable, semi-cartoony bloodstream with ornate immune-themed UI, bright arcade feedback, and stable 60 FPS on the iPhone 17 Pro simulator.

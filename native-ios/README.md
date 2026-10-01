@@ -2,6 +2,10 @@
 
 This folder contains the new native iOS/SpriteKit rebuild of Bloodstream Defender. The Godot project at the workspace root remains the reference blueprint and should not be modified for the native port unless a change is explicitly needed there.
 
+## Maintenance status — October 1, 2026
+
+The working candidate is 1.1 (15). See the [renewed project review and release plan](../docs/maintenance-1.1-review-2026-10-01.md) and [automated resource/regression checks](scripts/README.md). The latest review built with Xcode 27 and tested on a separate iOS 27.0 simulator. The original vertical-slice notes below describe the port history. Current runtime Assets contain only referenced files; source art and alternates are preserved in `DevelopmentAssets` outside the app bundle.
+
 ## Project Structure
 
 - `BloodstreamDefenderSpriteKit.xcodeproj` - Xcode project for the native iOS app.
@@ -63,8 +67,9 @@ In the Codex sandbox on 2026-06-21, direct Swift typechecking passed with:
 
 Full `xcodebuild` validation in that sandbox reached Swift compilation but failed during `actool` because CoreSimulator runtimes were unavailable to the sandboxed process (`No available simulator runtimes for platform iphonesimulator`). Re-run from an unrestricted terminal/Xcode session for final Simulator launch verification.
 
-## Next Porting Steps
+## Next Maintenance Steps
 
-- Continue playtest tuning boss durability, warning clarity, and late-run pacing after device/TestFlight feedback.
-- Promote the copied loose gameplay PNG/audio files into Xcode asset catalogs and SpriteKit texture atlases.
-- Add final launch metadata, store display name, leaderboard records, and signing/team settings before device/TestFlight builds.
+- Complete physical-device audio, tilt, layout, and six-boss/late-run QA for the 1.1 candidate.
+- Verify the new independent Game Center maxima/retries with an authenticated account, and check legacy checkpoint compatibility before submission. Host regression tests cover offline state and account-change logic without live submissions.
+- Profile before deciding whether texture atlases, image resizing, or audio recompression are worthwhile.
+- Inspect the actual fresh archive/IPA and confirm App Store Connect version/build before an authorized submission. The existing export-options file has `destination=upload` and is not for local-only verification.

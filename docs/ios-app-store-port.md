@@ -1,5 +1,7 @@
 # Bloodstream Defender iOS App Store Port
 
+> Historical Godot export notes. The current app is the native SpriteKit project under `native-ios/`; use the [October 1 maintenance review](maintenance-1.1-review-2026-10-01.md) for current status. Historical signing/TestFlight blockers below are not assertions about the released native app.
+
 ## Recommendation
 
 Use the Godot version as the App Store build.

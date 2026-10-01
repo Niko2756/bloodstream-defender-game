@@ -46,6 +46,24 @@ private enum UpgradeChoice {
     case dash
 }
 
+private enum TiltCalibrationResult {
+    case centered
+    case pending
+    case unavailable
+}
+
+private enum CoachCompletion {
+    case none
+    case firstRun
+    case dashUnlock
+    case pulseUnlock
+}
+
+private struct CoachMessage {
+    let text: String
+    let completion: CoachCompletion
+}
+
 private struct UpgradeRankInfo {
     let current: String
     let next: String
@@ -62,7 +80,7 @@ private struct UpgradeDefinition {
     let accent: UIColor
 }
 
-private enum EnemyKind {
+private enum EnemyKind: Hashable {
     case basic
     case fast
     case tank
@@ -73,7 +91,7 @@ private enum EnemyKind {
     case boss
 }
 
-private enum BossKind {
+private enum BossKind: Hashable {
     case pox
     case adenovirus
     case filovirus
@@ -544,6 +562,10 @@ private final class HapticEngine {
 }
 
 private final class GameCenterService {
+    private enum ScoreSubmissionError: Error {
+        case authenticationChanged
+    }
+
     private enum PendingPresentation {
         case leaderboards
         case challenges
@@ -572,10 +594,16 @@ private final class GameCenterService {
 
     private(set) var isAuthenticated = false
     private var isAuthenticating = false
-    private var pendingRecord: RunRecord?
+    private let leaderboardProgress = LeaderboardProgress()
     private var pendingPresentation: PendingPresentation?
     var onAuthenticationChanged: ((Bool) -> Void)?
     var onPresentationResult: ((PresentationResult) -> Void)?
+
+    init() {
+        leaderboardProgress.onSubmissionFailure = { metric, error in
+            NSLog("Game Center %@ submission retained for retry: %@", metric.rawValue, error.localizedDescription)
+        }
+    }
 
     func authenticate(presentingViewController: UIViewController?, bestRunProvider: @escaping () -> RunRecord?) {
         authenticate(
@@ -590,6 +618,10 @@ private final class GameCenterService {
         bestRunProvider: @escaping () -> RunRecord?,
         pendingPresentation: PendingPresentation?
     ) {
+        // Seed the new independent maxima from the existing profile without changing its summary.
+        if let bestRun = bestRunProvider() {
+            leaderboardProgress.record(score: bestRun.score, level: bestRun.level)
+        }
         if let pendingPresentation {
             self.pendingPresentation = pendingPresentation
         }
@@ -598,67 +630,60 @@ private final class GameCenterService {
         }
 
         isAuthenticating = true
-        GKLocalPlayer.local.authenticateHandler = { [weak self, weak presentingViewController] viewController, error in
-            guard let self else {
-                return
-            }
-
-            if let viewController {
-                presentingViewController?.present(viewController, animated: true)
-                return
-            }
-
-            self.isAuthenticating = false
-            self.isAuthenticated = GKLocalPlayer.local.isAuthenticated
-            self.onAuthenticationChanged?(self.isAuthenticated)
-            if self.isAuthenticated {
-                if let bestRun = bestRunProvider() {
-                    self.submit(record: bestRun)
-                } else if let pendingRecord = self.pendingRecord {
-                    self.submit(record: pendingRecord)
+        GKLocalPlayer.local.authenticateHandler = { [weak self, weak presentingViewController] viewController, _ in
+            DispatchQueue.main.async {
+                guard let self else {
+                    return
                 }
-                if let pendingPresentation = self.pendingPresentation {
+                if let viewController {
+                    presentingViewController?.present(viewController, animated: true)
+                    return
+                }
+
+                self.isAuthenticating = false
+                self.isAuthenticated = GKLocalPlayer.local.isAuthenticated
+                self.onAuthenticationChanged?(self.isAuthenticated)
+                if self.isAuthenticated {
+                    self.retryPendingScores()
+                    if let pendingPresentation = self.pendingPresentation {
+                        self.pendingPresentation = nil
+                        self.onPresentationResult?(self.present(pendingPresentation, from: presentingViewController))
+                    }
+                } else {
+                    let hadPendingPresentation = self.pendingPresentation != nil
                     self.pendingPresentation = nil
-                    self.onPresentationResult?(self.present(pendingPresentation, from: presentingViewController))
-                }
-            } else {
-                if error != nil {
-                    self.pendingRecord = bestRunProvider()
-                }
-                let hadPendingPresentation = self.pendingPresentation != nil
-                self.pendingPresentation = nil
-                if hadPendingPresentation {
-                    self.onPresentationResult?(.unavailable)
+                    if hadPendingPresentation {
+                        self.onPresentationResult?(.unavailable)
+                    }
                 }
             }
         }
     }
 
     func submit(record: RunRecord) {
-        guard record.score > 0 || record.level > 1 else {
-            return
-        }
+        leaderboardProgress.record(score: record.score, level: record.level)
+        retryPendingScores()
+    }
 
+    func retryPendingScores() {
         guard GKLocalPlayer.local.isAuthenticated else {
-            pendingRecord = record
             return
         }
-
         let player = GKLocalPlayer.local
-        if record.score > 0 {
-            GKLeaderboard.submitScore(
-                record.score,
-                context: 0,
-                player: player,
-                leaderboardIDs: [Constants.scoreLeaderboardID]
-            ) { _ in }
+        let playerID = player.gamePlayerID
+        leaderboardProgress.submitPending(for: playerID) { metric, value, completion in
+            // A newer queued maximum may flush after an account changed mid-request.
+            guard GKLocalPlayer.local.isAuthenticated, GKLocalPlayer.local.gamePlayerID == playerID else {
+                completion(ScoreSubmissionError.authenticationChanged)
+                return
+            }
+            let leaderboardID = metric == .score ? Constants.scoreLeaderboardID : Constants.levelLeaderboardID
+            GKLeaderboard.submitScore(value, context: 0, player: player, leaderboardIDs: [leaderboardID]) { error in
+                DispatchQueue.main.async {
+                    completion(error)
+                }
+            }
         }
-        GKLeaderboard.submitScore(
-            record.level,
-            context: 0,
-            player: player,
-            leaderboardIDs: [Constants.levelLeaderboardID]
-        ) { _ in }
     }
 
     @discardableResult
@@ -762,9 +787,13 @@ private final class PlayerProfileStore {
         static let musicMuted = "bloodstream.spritekit.settings.musicMuted"
         static let sfxMuted = "bloodstream.spritekit.settings.sfxMuted"
         static let hapticsMuted = "bloodstream.spritekit.settings.hapticsMuted"
+        static let motionComfortEnabled = "bloodstream.spritekit.settings.motionComfortEnabled"
         static let tiltEnabled = "bloodstream.spritekit.settings.tiltEnabled"
         static let tiltSensitivity = "bloodstream.spritekit.settings.tiltSensitivity"
         static let prefersGlassCombatAbilityControls = "bloodstream.spritekit.settings.prefersGlassCombatAbilityControls"
+        static let hasSeenFirstRunCoaching = "bloodstream.spritekit.coaching.hasSeenFirstRun"
+        static let hasSeenDashUnlockCoach = "bloodstream.spritekit.coaching.hasSeenDashUnlock"
+        static let hasSeenPulseUnlockCoach = "bloodstream.spritekit.coaching.hasSeenPulseUnlock"
         static let runCheckpoint = "bloodstream.spritekit.runCheckpoint"
     }
 
@@ -810,6 +839,16 @@ private final class PlayerProfileStore {
         set { defaults.set(newValue, forKey: Key.hapticsMuted) }
     }
 
+    var motionComfortEnabled: Bool {
+        get {
+            guard defaults.object(forKey: Key.motionComfortEnabled) != nil else {
+                return UIAccessibility.isReduceMotionEnabled
+            }
+            return defaults.bool(forKey: Key.motionComfortEnabled)
+        }
+        set { defaults.set(newValue, forKey: Key.motionComfortEnabled) }
+    }
+
     var tiltEnabled: Bool {
         get { defaults.bool(forKey: Key.tiltEnabled) }
         set { defaults.set(newValue, forKey: Key.tiltEnabled) }
@@ -836,6 +875,21 @@ private final class PlayerProfileStore {
             return defaults.bool(forKey: Key.prefersGlassCombatAbilityControls)
         }
         set { defaults.set(newValue, forKey: Key.prefersGlassCombatAbilityControls) }
+    }
+
+    var hasSeenFirstRunCoaching: Bool {
+        get { defaults.bool(forKey: Key.hasSeenFirstRunCoaching) }
+        set { defaults.set(newValue, forKey: Key.hasSeenFirstRunCoaching) }
+    }
+
+    var hasSeenDashUnlockCoach: Bool {
+        get { defaults.bool(forKey: Key.hasSeenDashUnlockCoach) }
+        set { defaults.set(newValue, forKey: Key.hasSeenDashUnlockCoach) }
+    }
+
+    var hasSeenPulseUnlockCoach: Bool {
+        get { defaults.bool(forKey: Key.hasSeenPulseUnlockCoach) }
+        set { defaults.set(newValue, forKey: Key.hasSeenPulseUnlockCoach) }
     }
 
     var runCheckpoint: RunCheckpoint? {
@@ -959,6 +1013,8 @@ private final class Enemy {
     var orbitDirection: CGFloat = 1
     var bossComboStep = 0
     var bossTrailTimer: TimeInterval = 0
+    var animationFrameIndex = -1
+    var animationVisualHeight: CGFloat = 0
     var deathAnimationActive = false
     var dead = false
 
@@ -1124,6 +1180,11 @@ final class GameScene: SKScene {
     private var howToPlayTexture: SKTexture?
     private var upgradeTitlePlaqueTexture: SKTexture?
     private var upgradeMedallionTextures: [UpgradeChoice: SKTexture] = [:]
+    private var playerFrameTextures: [SKTexture] = []
+    private var greenVirusFrameTextures: [SKTexture] = []
+    private var purpleVirusFrameTextures: [SKTexture] = []
+    private var influenzaFrameTextures: [SKTexture] = []
+    private var bossFrameTextures: [BossKind: [SKTexture]] = [:]
     private var antibodyTextures: [SKTexture] = []
     private lazy var sparkTexture = GameScene.makeSparkTexture()
     private var backgroundLayers: [ParallaxLayer] = []
@@ -1169,6 +1230,7 @@ final class GameScene: SKScene {
     private var musicMuted = false
     private var sfxMuted = false
     private var hapticsMuted = false
+    private var motionComfortEnabled = false
     private var lastRunWasBest = false
     private var restartConfirmVisible = false
     private var audioSettingsVisible = false
@@ -1181,9 +1243,13 @@ final class GameScene: SKScene {
     private var horizontalSwimSoundInput = 0
     private var dashTrailTimer: TimeInterval = 0
     private var swimWakeTimer: TimeInterval = 0
+    private var playerAttackPoseTimer: TimeInterval = 0
+    private var playerAnimationFrameIndex = -1
     private var lastFacing = CGVector(dx: 1, dy: 0)
     private var tiltEnabled = false
     private var tiltHasCalibration = false
+    private var tiltCalibrationPending = false
+    private var tiltCalibrationTimeout: TimeInterval = 0
     private var tiltNeutral = CGVector.zero
     private var tiltVector = CGVector.zero
     private var tiltSensitivity = Constants.tiltSensitivityDefault
@@ -1203,6 +1269,8 @@ final class GameScene: SKScene {
     private var fireTouchIds = Set<ObjectIdentifier>()
     private var joystickVector = CGVector.zero
     private var lockTargetId: Int?
+    private var coachMessages: [CoachMessage] = []
+    private var coachMessageTimer: TimeInterval = 0
 
     private var playerNode: SKSpriteNode?
     private var scoreLabel: SKLabelNode?
@@ -1228,6 +1296,7 @@ final class GameScene: SKScene {
     private var musicToggleButton = SKShapeNode()
     private var sfxToggleButton = SKShapeNode()
     private var hapticsToggleButton = SKShapeNode()
+    private var motionComfortToggleButton = SKShapeNode()
     private var inputSettingsButton = SKShapeNode()
     private var howToPlayButton = SKShapeNode()
     private var combatAbilityStyleButton = SKShapeNode()
@@ -1237,6 +1306,7 @@ final class GameScene: SKScene {
     private var musicToggleLabel: SKLabelNode?
     private var sfxToggleLabel: SKLabelNode?
     private var hapticsToggleLabel: SKLabelNode?
+    private var motionComfortToggleLabel: SKLabelNode?
     private var inputSettingsLabel: SKLabelNode?
     private var howToPlayLabel: SKLabelNode?
     private var combatAbilityStyleLabel: SKLabelNode?
@@ -1278,6 +1348,7 @@ final class GameScene: SKScene {
     private var gameOverStatLabels: [String: SKLabelNode] = [:]
     private var gameOverAdaptationsLabel: SKLabelNode?
     private var tryAgainButton = SKShapeNode()
+    private var mainMenuButton = SKShapeNode()
     private var progressFill: SKShapeNode?
     private var joystickRing = SKShapeNode()
     private var joystickKnob = SKShapeNode()
@@ -1298,7 +1369,6 @@ final class GameScene: SKScene {
     override func didMove(to view: SKView) {
         backgroundColor = .black
         anchorPoint = .zero
-        startMotionInputIfNeeded()
         loadTextures()
         setupStage()
         setupBackground()
@@ -1320,21 +1390,31 @@ final class GameScene: SKScene {
     }
 
     func applicationWillResignActive() {
+        cancelPendingTiltCalibration()
+        resetTiltCalibrationFeedback()
+        stopMotionInput()
         pauseAndCheckpointForLifecycle()
     }
 
     func applicationDidEnterBackground() {
+        cancelPendingTiltCalibration()
+        resetTiltCalibrationFeedback()
+        stopMotionInput()
         pauseAndCheckpointForLifecycle()
     }
 
     func applicationWillEnterForeground() {
+        gameCenter.retryPendingScores()
         lastUpdateTime = 0
         pressedKeys.removeAll()
         joystickTouchId = nil
         tiltSensitivityTouchId = nil
         fireTouchIds.removeAll()
         joystickVector = .zero
+        tiltHasCalibration = false
+        tiltVector = .zero
         updateJoystickVisual()
+        startMotionInputIfNeeded()
 
         if mode == .paused {
             audio.pauseMusic()
@@ -1454,6 +1534,7 @@ final class GameScene: SKScene {
             updateCollisions()
             updateLevelFlow(delta: delta)
             updateHUD()
+            updateCoachMessages(delta: delta)
         case .levelComplete:
             updateBackground()
         case .upgrade:
@@ -1467,6 +1548,7 @@ final class GameScene: SKScene {
         bossHitFeedbackTimer = max(0, bossHitFeedbackTimer - delta)
         plateletHitSoundTimer = max(0, plateletHitSoundTimer - delta)
         uiHoverSoundTimer = max(0, uiHoverSoundTimer - delta)
+        updatePendingTiltCalibration(delta: delta)
         updateScreenShake(delta: delta)
         updateAudio(delta: delta)
     }
@@ -1521,9 +1603,15 @@ final class GameScene: SKScene {
                 }
             }
 
-            if mode == .gameOver, tryAgainButton.contains(baseToStage(basePoint)) {
-                playUITap()
-                startRun()
+            if mode == .gameOver {
+                let stagePoint = baseToStage(basePoint)
+                if tryAgainButton.contains(stagePoint) {
+                    playUITap()
+                    startRun()
+                } else if mainMenuButton.contains(stagePoint) {
+                    playUITap()
+                    returnToMainMenu()
+                }
                 continue
             }
 
@@ -1543,6 +1631,13 @@ final class GameScene: SKScene {
                         setHapticsMuted(!hapticsMuted)
                         audio.playSFX(.uiSelect)
                         haptics.play(.selection)
+                    } else if motionComfortToggleButton.contains(stagePoint) {
+                        if UIAccessibility.isReduceMotionEnabled {
+                            showMotionComfortSystemNote()
+                        } else {
+                            setMotionComfortEnabled(!motionComfortEnabled)
+                        }
+                        playUITap()
                     }
                 } else if inputSettingsVisible {
                     if inputSettingsBackButton.contains(stagePoint) {
@@ -1555,8 +1650,7 @@ final class GameScene: SKScene {
                         toggleTiltMode()
                         playUITap()
                     } else if tiltCalibrateButton.contains(stagePoint) {
-                        let calibrated = calibrateTilt(showBannerText: false)
-                        showTiltCalibrationFeedback(success: calibrated)
+                        presentTiltCalibrationResult(calibrateTilt())
                         playUITap()
                     } else if tiltSensitivityHitArea.contains(stagePoint) {
                         tiltSensitivityTouchId = touchId
@@ -1704,15 +1798,28 @@ final class GameScene: SKScene {
     private func loadTextures() {
         atlasTexture = texture(named: "bloodstream-asset-atlas-transparent-no-despill", extension: "png", subdirectory: "Assets/sprites/processed")
         if let atlasTexture {
+            playerFrameTextures = cachedTextures(from: atlasTexture, frames: AtlasFrames.whiteCell)
+            greenVirusFrameTextures = cachedTextures(from: atlasTexture, frames: AtlasFrames.greenVirus)
+            purpleVirusFrameTextures = cachedTextures(from: atlasTexture, frames: AtlasFrames.purpleVirus)
             antibodyTextures = AtlasFrames.antibody.map { regionTexture(from: atlasTexture, frame: $0) }
         }
         influenzaTexture = texture(named: "influenza-virion-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
+        if let influenzaTexture {
+            influenzaFrameTextures = cachedTextures(from: influenzaTexture, frames: AtlasFrames.influenza)
+        }
         poxBossTexture = texture(named: "pox-brick-boss-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         adenovirusTexture = texture(named: "adenovirus-prism-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         filovirusTexture = texture(named: "filovirus-ribbon-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         rotavirusTexture = texture(named: "rotavirus-gyre-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         lyssavirusTexture = texture(named: "lyssavirus-lance-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
         norovirusTexture = texture(named: "norovirus-swarm-core-spritesheet", extension: "png", subdirectory: "Assets/sprites/processed")
+        bossFrameTextures.removeAll()
+        cacheBossFrames(.pox, texture: poxBossTexture, frames: AtlasFrames.poxBoss)
+        cacheBossFrames(.adenovirus, texture: adenovirusTexture, frames: AtlasFrames.adenovirus)
+        cacheBossFrames(.filovirus, texture: filovirusTexture, frames: AtlasFrames.filovirus)
+        cacheBossFrames(.rotavirus, texture: rotavirusTexture, frames: AtlasFrames.rotavirus)
+        cacheBossFrames(.lyssavirus, texture: lyssavirusTexture, frames: AtlasFrames.lyssavirus)
+        cacheBossFrames(.norovirus, texture: norovirusTexture, frames: AtlasFrames.norovirus)
         startSheetTexture = texture(named: "start-screen-asset-sheet", extension: "png", subdirectory: "Assets/ui")
         titlePlaqueTexture = texture(named: "start-title-plaque", extension: "png", subdirectory: "Assets/ui")
         scoreFrameTexture = texture(named: "hud-game-score-frame", extension: "png", subdirectory: "Assets/ui")
@@ -1767,7 +1874,7 @@ final class GameScene: SKScene {
             return
         }
         let frame = AtlasFrames.whiteCell[0]
-        let texture = regionTexture(from: atlasTexture, frame: frame)
+        let texture = playerFrameTextures.first ?? regionTexture(from: atlasTexture, frame: frame)
         let node = SKSpriteNode(texture: texture)
         node.size = playerSpriteSize(for: frame)
         node.zPosition = ZLayer.entity + 6
@@ -1973,7 +2080,7 @@ final class GameScene: SKScene {
         dashButton.zPosition = ZLayer.controls + 20
         controlsNode.addChild(dashButton)
 
-        let dashLabel = label("LOCKED", size: 18, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
+        let dashLabel = label("Dash", size: 18, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
         dashLabel.position = dashButton.position
         dashLabel.zPosition = ZLayer.controls + 21
         controlsNode.addChild(dashLabel)
@@ -1988,7 +2095,7 @@ final class GameScene: SKScene {
         pulseButton.zPosition = ZLayer.controls + 22
         controlsNode.addChild(pulseButton)
 
-        let pulseLabel = label("LOCKED", size: 18, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
+        let pulseLabel = label("Pulse", size: 18, color: UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.86))
         pulseLabel.position = pulseButton.position
         pulseLabel.zPosition = ZLayer.controls + 23
         controlsNode.addChild(pulseLabel)
@@ -2232,34 +2339,44 @@ final class GameScene: SKScene {
         shade.zPosition = ZLayer.overlay
         audioSettingsOverlay.addChild(shade)
 
-        let panel = SKShapeNode(rectOf: CGSize(width: 600, height: 350), cornerRadius: 26)
+        let panel = SKShapeNode(rectOf: CGSize(width: 600, height: 410), cornerRadius: 26)
         panel.fillColor = UIColor(red: 0.025, green: 0.0, blue: 0.025, alpha: 0.98)
         panel.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.86)
         panel.lineWidth = 3
         panel.glowWidth = 6
-        panel.position = baseToStage(CGPoint(x: 640, y: 396))
+        panel.position = baseToStage(CGPoint(x: 640, y: 392))
         panel.zPosition = ZLayer.overlay + 1
         audioSettingsOverlay.addChild(panel)
 
         let title = label("Audio & Feedback", size: 29, color: UIColor(red: 1.0, green: 0.92, blue: 0.84, alpha: 1.0))
-        title.position = baseToStage(CGPoint(x: 640, y: 266))
+        title.position = baseToStage(CGPoint(x: 640, y: 224))
         title.zPosition = ZLayer.overlay + 61
         audioSettingsOverlay.addChild(title)
 
-        let back = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 470, y: 318), size: CGSize(width: 142, height: 50), title: "Back", fontSize: 15)
+        let back = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 470, y: 278), size: CGSize(width: 142, height: 50), title: "Back", fontSize: 15)
         audioSettingsBackButton = back.shape
 
-        let music = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 364), size: CGSize(width: 220, height: 52), title: "Music: On", fontSize: 16)
+        let music = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 338), size: CGSize(width: 250, height: 52), title: "Music: On", fontSize: 16)
         musicToggleButton = music.shape
         musicToggleLabel = music.label
 
-        let sfx = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 424), size: CGSize(width: 220, height: 52), title: "Effects: On", fontSize: 16)
+        let sfx = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 398), size: CGSize(width: 250, height: 52), title: "Effects: On", fontSize: 16)
         sfxToggleButton = sfx.shape
         sfxToggleLabel = sfx.label
 
-        let haptics = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 484), size: CGSize(width: 220, height: 52), title: "Haptics: On", fontSize: 16)
+        let haptics = addArtButton(to: audioSettingsOverlay, center: CGPoint(x: 640, y: 458), size: CGSize(width: 250, height: 52), title: "Haptics: On", fontSize: 16)
         hapticsToggleButton = haptics.shape
         hapticsToggleLabel = haptics.label
+
+        let motionComfort = addArtButton(
+            to: audioSettingsOverlay,
+            center: CGPoint(x: 640, y: 518),
+            size: CGSize(width: 250, height: 52),
+            title: "Motion Comfort: Off",
+            fontSize: 15
+        )
+        motionComfortToggleButton = motionComfort.shape
+        motionComfortToggleLabel = motionComfort.label
 
         audioSettingsOverlay.isHidden = true
         pauseOverlay.addChild(audioSettingsOverlay)
@@ -2767,15 +2884,39 @@ final class GameScene: SKScene {
             gameOverStatLabels[key] = value
         }
 
+        // Match the two halves of the existing pill artwork; keep labels and
+        // hit targets together with a small gap around the center divider.
+        let actionHalfWidth: CGFloat = 112
+        let actionCenterOffset: CGFloat = 58
         let tryAgain = addArtButton(
             to: gameOverOverlay,
-            center: panelPoint(CGPoint(x: 638, y: 527)),
-            size: CGSize(width: 270 * panelScale, height: 46 * panelScale),
+            center: panelPoint(CGPoint(x: panelCenter.x - actionCenterOffset, y: 527)),
+            size: CGSize(width: actionHalfWidth * panelScale, height: 46 * panelScale),
             title: "TRY AGAIN",
-            fontSize: 18 * panelScale,
+            fontSize: 13 * panelScale,
             drawFrame: false
         )
         tryAgainButton = tryAgain.shape
+
+        let dividerPath = CGMutablePath()
+        dividerPath.move(to: baseToStage(panelPoint(CGPoint(x: 640, y: 510))))
+        dividerPath.addLine(to: baseToStage(panelPoint(CGPoint(x: 640, y: 544))))
+        let divider = SKShapeNode(path: dividerPath)
+        divider.strokeColor = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 0.54)
+        divider.lineWidth = 1.5 * panelScale
+        divider.glowWidth = 2
+        divider.zPosition = ZLayer.overlay + 27
+        gameOverOverlay.addChild(divider)
+
+        let mainMenu = addArtButton(
+            to: gameOverOverlay,
+            center: panelPoint(CGPoint(x: panelCenter.x + actionCenterOffset, y: 527)),
+            size: CGSize(width: actionHalfWidth * panelScale, height: 46 * panelScale),
+            title: "MAIN MENU",
+            fontSize: 13 * panelScale,
+            drawFrame: false
+        )
+        mainMenuButton = mainMenu.shape
         gameOverOverlay.isHidden = true
         overlayNode.addChild(gameOverOverlay)
     }
@@ -2790,15 +2931,98 @@ final class GameScene: SKScene {
         bannerLabel.fontSize = titleBanner ? 15 : 24
         bannerLabel.position = baseToStage(CGPoint(x: 640, y: titleBanner ? 706 : 196))
         bannerLabel.alpha = 0
-        bannerLabel.setScale(0.96)
-        bannerLabel.run(.sequence([
-            .group([
+        bannerLabel.setScale(shouldReduceMotion ? 1.0 : 0.96)
+        let entrance: SKAction = shouldReduceMotion
+            ? .fadeIn(withDuration: 0.12)
+            : .group([
                 .fadeIn(withDuration: 0.16),
                 .scale(to: 1.0, duration: 0.16)
-            ]),
+            ])
+        bannerLabel.run(.sequence([
+            entrance,
             .wait(forDuration: 1.45),
-            .fadeOut(withDuration: 0.35)
+            .fadeOut(withDuration: shouldReduceMotion ? 0.18 : 0.35)
         ]))
+    }
+
+    private func beginFirstRunCoachingIfNeeded() {
+        guard !profileStore.hasSeenFirstRunCoaching else {
+            return
+        }
+        enqueueCoachMessages([
+            "Move with the left control • tap anywhere to fire",
+            "Clear the section, then choose an adaptation",
+            "Dash and Pulse unlock from adaptation choices"
+        ], initialDelay: 2.2, completionOnLastMessage: .firstRun)
+    }
+
+    private func enqueueCoachMessages(
+        _ messages: [String],
+        initialDelay: TimeInterval = 2.2,
+        completionOnLastMessage: CoachCompletion = .none
+    ) {
+        guard !messages.isEmpty else {
+            return
+        }
+        let queueWasEmpty = coachMessages.isEmpty
+        coachMessages.append(contentsOf: messages.enumerated().map { index, text in
+            CoachMessage(
+                text: text,
+                completion: index == messages.count - 1 ? completionOnLastMessage : .none
+            )
+        })
+        if queueWasEmpty {
+            coachMessageTimer = initialDelay
+        }
+    }
+
+    private func updateCoachMessages(delta: TimeInterval) {
+        guard mode == .running, !coachMessages.isEmpty else {
+            return
+        }
+        coachMessageTimer = max(0, coachMessageTimer - delta)
+        guard coachMessageTimer == 0 else {
+            return
+        }
+        let message = coachMessages.removeFirst()
+        showBanner(message.text)
+        switch message.completion {
+        case .firstRun:
+            profileStore.hasSeenFirstRunCoaching = true
+        case .dashUnlock:
+            profileStore.hasSeenDashUnlockCoach = true
+        case .pulseUnlock:
+            profileStore.hasSeenPulseUnlockCoach = true
+        case .none:
+            break
+        }
+        coachMessageTimer = 2.35
+    }
+
+    private func enqueuePendingUnlockCoachingIfNeeded() {
+        if pulseRank > 0,
+           !profileStore.hasSeenPulseUnlockCoach,
+           !coachMessages.contains(where: { $0.completion == .pulseUnlock }) {
+            enqueueCoachMessages(
+                ["Complement Pulse unlocked • tap PULSE in danger"],
+                initialDelay: 2.2,
+                completionOnLastMessage: .pulseUnlock
+            )
+        }
+        if dashRank > 0,
+           !profileStore.hasSeenDashUnlockCoach,
+           !coachMessages.contains(where: { $0.completion == .dashUnlock }) {
+            enqueueCoachMessages(
+                ["Chemotaxis Dash unlocked • tap DASH to escape"],
+                initialDelay: 2.2,
+                completionOnLastMessage: .dashUnlock
+            )
+        }
+    }
+
+    private func clearCoachMessages() {
+        coachMessages.removeAll()
+        coachMessageTimer = 0
     }
 
     private func showRunRestoreToast() {
@@ -2828,6 +3052,11 @@ final class GameScene: SKScene {
 
     private func showTitle() {
         profileStore.clearRunCheckpoint()
+        clearCoachMessages()
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
+        tiltVector = .zero
         mode = .title
         updateTitleBestRunLabel()
         titleGroup.isHidden = false
@@ -2848,8 +3077,25 @@ final class GameScene: SKScene {
         publishCombatAbilityControlState()
     }
 
+    private func returnToMainMenu() {
+        clearRunEntities(resetEnemyIds: true)
+        player = PlayerState()
+        playerNode?.position = baseToStage(player.position)
+        playerNode?.zRotation = 0
+        joystickVector = .zero
+        fireTouchIds.removeAll()
+        pressedKeys.removeAll()
+        lockTargetId = nil
+        clearScreenShake()
+        showTitle()
+    }
+
     private func startRun() {
         profileStore.clearRunCheckpoint()
+        clearCoachMessages()
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
         clearRunEntities(resetEnemyIds: true)
         player = PlayerState()
         player.invulnerable = 4.0
@@ -2872,6 +3118,8 @@ final class GameScene: SKScene {
         horizontalSwimSoundInput = 0
         dashTrailTimer = 0
         swimWakeTimer = 0
+        playerAttackPoseTimer = 0
+        playerAnimationFrameIndex = -1
         lastFacing = CGVector(dx: 1, dy: 0)
         tiltVector = .zero
         clearScreenShake()
@@ -2889,15 +3137,17 @@ final class GameScene: SKScene {
         hudNode.isHidden = false
         controlsNode.isHidden = false
         playerNode?.isHidden = false
+        mode = .running
+        startMotionInputIfNeeded()
         loadLevel(1, clearEntities: false)
         updateJoystickVisual()
         updateHUD()
         updateAbilityControls()
-        mode = .running
         stopBossEncounterSFX()
         audio.playMusic(.combat)
         audio.playAmbience()
         saveRunCheckpoint()
+        beginFirstRunCoachingIfNeeded()
         publishCombatAbilityControlState(force: true)
     }
 
@@ -2918,6 +3168,8 @@ final class GameScene: SKScene {
         horizontalSwimSoundInput = 0
         dashTrailTimer = 0
         swimWakeTimer = 0
+        playerAttackPoseTimer = 0
+        playerAnimationFrameIndex = -1
         lastFacing = CGVector(dx: 1, dy: 0)
         tiltVector = .zero
         loadLevel(level + 1, clearEntities: true)
@@ -2934,6 +3186,7 @@ final class GameScene: SKScene {
         updateHUD()
         updateAbilityControls()
         mode = .running
+        startMotionInputIfNeeded()
         stopBossEncounterSFX()
         playDesiredMusic()
         audio.playAmbience()
@@ -3089,6 +3342,8 @@ final class GameScene: SKScene {
         horizontalSwimSoundInput = 0
         dashTrailTimer = 0
         swimWakeTimer = 0
+        playerAttackPoseTimer = 0
+        playerAnimationFrameIndex = -1
         lastFacing = CGVector(dx: 1, dy: 0)
         tiltVector = .zero
         lockTargetId = nil
@@ -3170,6 +3425,8 @@ final class GameScene: SKScene {
             playDesiredMusic()
         }
 
+        beginFirstRunCoachingIfNeeded()
+        enqueuePendingUnlockCoachingIfNeeded()
         showRunRestoreToast()
         saveRunCheckpoint()
         publishCombatAbilityControlState(force: true)
@@ -3453,6 +3710,9 @@ final class GameScene: SKScene {
     }
 
     private func reserveHitFlash(for enemy: Enemy) -> Bool {
+        guard !shouldReduceMotion else {
+            return false
+        }
         let budget = cosmeticLoadSheddingActive ? Constants.cosmeticHitFlashFrameBudgetUnderLoad : Constants.cosmeticHitFlashFrameBudget
         guard hitFlashesThisFrame < budget else {
             return false
@@ -3573,6 +3833,10 @@ final class GameScene: SKScene {
 
     private func enterPausedState(playOpeningSFX: Bool) {
         mode = .paused
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
+        tiltVector = .zero
         pauseOverlay.isHidden = false
         closePauseSubmenus()
         restartConfirmVisible = false
@@ -3597,6 +3861,7 @@ final class GameScene: SKScene {
 
     private func resumePausedRun() {
         mode = .running
+        startMotionInputIfNeeded()
         pauseOverlay.isHidden = true
         closePauseSubmenus()
         restartConfirmVisible = false
@@ -3665,6 +3930,10 @@ final class GameScene: SKScene {
     private func endRun() {
         profileStore.clearRunCheckpoint()
         mode = .gameOver
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
+        tiltVector = .zero
         let finalRecord = currentRunRecord()
         lastRunWasBest = profileStore.recordRun(finalRecord)
         gameCenter.submit(record: finalRecord)
@@ -3736,6 +4005,7 @@ final class GameScene: SKScene {
         player.pulseCooldown = max(0, player.pulseCooldown - delta)
         player.invulnerable = max(0, player.invulnerable - delta)
         player.hurtTimer = max(0, player.hurtTimer - delta)
+        playerAttackPoseTimer = max(0, playerAttackPoseTimer - delta)
 
         if !fireTouchIds.isEmpty || pressedKeys.contains(.keyboardSpacebar) {
             fireAntibody(force: false)
@@ -3747,11 +4017,34 @@ final class GameScene: SKScene {
 
         playerNode.position = baseToStage(player.position)
         playerNode.zRotation = -clamp(player.velocity.dy / 650, -0.35, 0.35)
-        if let atlasTexture {
+        if !playerFrameTextures.isEmpty {
             let isDashing = player.dashTimer > 0 && dashRank > 0
-            let frame = isDashing ? AtlasFrames.whiteCell[5] : AtlasFrames.whiteCell[abs(move.dx) > 0.05 ? 1 : 0]
-            playerNode.texture = regionTexture(from: atlasTexture, frame: frame)
-            playerNode.size = playerSpriteSize(for: frame, matchIdleHeight: isDashing)
+            let isMoving = vectorLength(player.velocity) > 32
+            let frameIndex: Int
+            if isDashing {
+                frameIndex = 5
+            } else if playerAttackPoseTimer > 0 {
+                frameIndex = shouldReduceMotion ? 1 : 4
+            } else if isMoving {
+                let swimCycle = shouldReduceMotion ? [1] : [0, 1, 2, 1]
+                frameIndex = swimCycle[Int(floor(sceneTime * 4.2)).positiveModulo(swimCycle.count)]
+            } else {
+                let idleCycle = shouldReduceMotion ? [0] : [0, 0, 3, 0]
+                frameIndex = idleCycle[Int(floor(sceneTime * 1.35)).positiveModulo(idleCycle.count)]
+            }
+
+            let safeFrameIndex = frameIndex.clamped(to: 0...(AtlasFrames.whiteCell.count - 1))
+            if safeFrameIndex != playerAnimationFrameIndex {
+                playerAnimationFrameIndex = safeFrameIndex
+                playerNode.texture = playerFrameTextures[safeFrameIndex]
+            }
+            let frame = AtlasFrames.whiteCell[safeFrameIndex]
+            let baseSize = playerSpriteSize(for: frame, matchIdleHeight: safeFrameIndex != 0)
+            let breathingScale = shouldReduceMotion ? CGFloat(1) : 1 + sin(CGFloat(sceneTime) * 2.45) * 0.018
+            playerNode.size = CGSize(
+                width: baseSize.width * breathingScale,
+                height: baseSize.height * breathingScale
+            )
         }
         let facingX = player.dashTimer > 0 ? lastFacing.dx : move.dx
         if facingX < -0.05 {
@@ -3759,7 +4052,11 @@ final class GameScene: SKScene {
         } else if facingX > 0.05 {
             playerNode.xScale = abs(playerNode.xScale)
         }
-        playerNode.alpha = player.hurtTimer > 0 && Int(player.hurtTimer * 22) % 2 == 0 ? 0.55 : 1.0
+        if player.hurtTimer > 0 {
+            playerNode.alpha = shouldReduceMotion ? 0.78 : (Int(player.hurtTimer * 22) % 2 == 0 ? 0.55 : 1.0)
+        } else {
+            playerNode.alpha = 1.0
+        }
         playerNode.colorBlendFactor = player.dashTimer > 0 ? 0.45 : 0
         playerNode.color = UIColor(red: 0.72, green: 1.0, blue: 1.0, alpha: 1.0)
         updateAbilityControls()
@@ -3878,7 +4175,8 @@ final class GameScene: SKScene {
             y: Constants.baseSize.height * 0.48
         )
         let position = restoredPosition ?? defaultPosition
-        let node = SKSpriteNode(texture: regionTexture(from: profile.texture, frame: frame))
+        let initialTexture = bossFrameTextures[bossKind]?.first ?? regionTexture(from: profile.texture, frame: frame)
+        let node = SKSpriteNode(texture: initialTexture)
         node.size = visualSize
         node.position = baseToStage(position)
         node.zPosition = ZLayer.entity + 7
@@ -4013,7 +4311,8 @@ final class GameScene: SKScene {
         guard let stats = enemyStats(for: requestedKind ?? pickEnemyKind()) else {
             return
         }
-        let frame = stats.frames.randomElement() ?? stats.frames[0]
+        let frameIndex = stats.frames.indices.randomElement() ?? 0
+        let frame = stats.frames[frameIndex]
         var spawnY = CGFloat.random(in: 130...(Constants.baseSize.height - 115))
         if runTime < 10, abs(spawnY - player.position.y) < 135 {
             spawnY = spawnY < player.position.y ? max(130, spawnY - 150) : min(Constants.baseSize.height - 115, spawnY + 150)
@@ -4024,7 +4323,10 @@ final class GameScene: SKScene {
             x: offscreenRightSpawnX(forVisualWidth: visualSize.width, grace: 50) + CGFloat.random(in: 0...170),
             y: spawnY
         )
-        let texture = regionTexture(from: stats.texture, frame: frame)
+        let cachedAnimation = regularEnemyAnimationData(for: stats.kind)
+        let texture = cachedAnimation?.textures.indices.contains(frameIndex) == true
+            ? cachedAnimation!.textures[frameIndex]
+            : regionTexture(from: stats.texture, frame: frame)
         let node = SKSpriteNode(texture: texture)
         node.size = visualSize
         node.position = baseToStage(position)
@@ -4045,6 +4347,8 @@ final class GameScene: SKScene {
             damage: stats.damage,
             reproductionCooldown: stats.reproductionCooldown
         )
+        enemy.animationFrameIndex = frameIndex
+        enemy.animationVisualHeight = visualSize.height
         nextEnemyId += 1
         enemies.append(enemy)
     }
@@ -4171,6 +4475,56 @@ final class GameScene: SKScene {
         )
     }
 
+    private func regularEnemyAnimationData(
+        for kind: EnemyKind
+    ) -> (textures: [SKTexture], frames: [SpriteFrame], framesPerSecond: TimeInterval)? {
+        switch kind {
+        case .basic:
+            return (greenVirusFrameTextures, AtlasFrames.greenVirus, 2.4)
+        case .fast:
+            return (purpleVirusFrameTextures, AtlasFrames.purpleVirus, 4.0)
+        case .tank:
+            return (purpleVirusFrameTextures, AtlasFrames.purpleVirus, 1.8)
+        case .budding:
+            return (greenVirusFrameTextures, AtlasFrames.greenVirus, 3.1)
+        case .influenza:
+            return (influenzaFrameTextures, AtlasFrames.influenza, 3.0)
+        case .fragment:
+            return (purpleVirusFrameTextures, AtlasFrames.purpleVirus, 4.8)
+        case .bossDecoy, .boss:
+            return nil
+        }
+    }
+
+    private func updateRegularEnemyAnimation(_ enemy: Enemy) {
+        guard let animation = regularEnemyAnimationData(for: enemy.kind),
+              !animation.textures.isEmpty,
+              animation.textures.count == animation.frames.count else {
+            return
+        }
+
+        let frameIndex: Int
+        if shouldReduceMotion {
+            frameIndex = enemy.animationFrameIndex.clamped(to: 0...(animation.frames.count - 1))
+        } else {
+            let phaseOffset = TimeInterval(enemy.id % 17) * 0.31
+            frameIndex = Int(floor((runTime + phaseOffset) * animation.framesPerSecond))
+                .positiveModulo(animation.frames.count)
+        }
+        guard frameIndex != enemy.animationFrameIndex else {
+            return
+        }
+
+        enemy.animationFrameIndex = frameIndex
+        enemy.node.texture = animation.textures[frameIndex]
+        let frame = animation.frames[frameIndex]
+        let visualHeight = max(1, enemy.animationVisualHeight)
+        enemy.node.size = CGSize(
+            width: visualHeight * frame.rect.width / frame.rect.height,
+            height: visualHeight
+        )
+    }
+
     private func updateEnemies(delta: TimeInterval) {
         var influenzaCloneRequests: [(position: CGPoint, velocity: CGVector)] = []
 
@@ -4191,8 +4545,13 @@ final class GameScene: SKScene {
                 }
             }
             enemy.node.position = baseToStage(enemy.position)
+            updateRegularEnemyAnimation(enemy)
             enemy.node.zRotation += CGFloat(delta) * (enemy.kind == .boss ? 0.18 : (enemy.kind == .tank ? 0.36 : 0.7))
             if enemy.position.x < offscreenLeftRemovalX(for: enemy.node, grace: 28) {
+                enemy.dead = true
+            } else if enemy.kind == .bossDecoy, enemy.bossActionTimer <= 0,
+                      enemy.position.x > visibleBaseMaxX() + enemy.node.size.width * 0.5 + 28 {
+                // Launched decoys can travel right; release their slots and shield contribution.
                 enemy.dead = true
             }
         }
@@ -4409,7 +4768,7 @@ final class GameScene: SKScene {
             lockLyssavirusTarget(for: enemy, desiredX: desiredX)
             enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desiredX, amount: min(CGFloat(delta) * 2.0, 0.16))
             enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: enemy.bossTargetY, amount: min(CGFloat(delta) * 2.6, 0.20))
-            let pulse = 0.36 + 0.18 * sin(CGFloat(runTime) * 22)
+            let pulse = shouldReduceMotion ? CGFloat(0.42) : 0.36 + 0.18 * sin(CGFloat(runTime) * 22)
             enemy.node.color = UIColor(red: 0.40, green: 1.0, blue: 0.94, alpha: 1.0)
             enemy.node.colorBlendFactor = pulse
             setBossTexture(enemy, profile: profile, frameIndex: 3)
@@ -4489,7 +4848,7 @@ final class GameScene: SKScene {
             lockLyssavirusTarget(for: enemy, desiredX: desiredX)
             enemy.position.x = CGFloat.lerp(from: enemy.position.x, to: desiredX, amount: min(CGFloat(delta) * 2.5, 0.22))
             enemy.position.y = CGFloat.lerp(from: enemy.position.y, to: enemy.bossTargetY, amount: min(CGFloat(delta) * 4.0, 0.34))
-            let pulse = 0.48 + 0.20 * sin(CGFloat(runTime) * 28)
+            let pulse = shouldReduceMotion ? CGFloat(0.52) : 0.48 + 0.20 * sin(CGFloat(runTime) * 28)
             enemy.node.color = UIColor(red: 0.45, green: 1.0, blue: 0.92, alpha: 1.0)
             enemy.node.colorBlendFactor = pulse
             setBossTexture(enemy, profile: profile, frameIndex: 3)
@@ -4652,8 +5011,13 @@ final class GameScene: SKScene {
     }
 
     private func setBossTexture(_ enemy: Enemy, profile: BossProfile, frameIndex: Int) {
-        let frame = profile.frames[frameIndex.clamped(to: 0...(profile.frames.count - 1))]
-        enemy.node.texture = regionTexture(from: profile.texture, frame: frame)
+        let safeFrameIndex = frameIndex.clamped(to: 0...(profile.frames.count - 1))
+        if let cachedTextures = bossFrameTextures[profile.kind],
+           cachedTextures.indices.contains(safeFrameIndex) {
+            enemy.node.texture = cachedTextures[safeFrameIndex]
+        } else {
+            enemy.node.texture = regionTexture(from: profile.texture, frame: profile.frames[safeFrameIndex])
+        }
     }
 
     private func beginBossDeathAnimation(_ enemy: Enemy) {
@@ -4972,6 +5336,7 @@ final class GameScene: SKScene {
             return
         }
         player.shootCooldown = cooldown
+        playerAttackPoseTimer = 0.14
 
         let target = findLockTarget()
         lockTargetId = target?.id
@@ -5078,10 +5443,15 @@ final class GameScene: SKScene {
         }
 
         if enemy.kind == .boss, enemy.bossKind == .adenovirus, !enemy.shieldOpen, !bypassAdenovirusShield {
-            enemy.node.run(.sequence([
-                .colorize(with: UIColor(red: 0.6, green: 1.0, blue: 1.0, alpha: 1.0), colorBlendFactor: 0.65, duration: 0.04),
-                .colorize(withColorBlendFactor: 0.28, duration: 0.10)
-            ]))
+            if shouldReduceMotion {
+                enemy.node.color = UIColor(red: 0.6, green: 1.0, blue: 1.0, alpha: 1.0)
+                enemy.node.colorBlendFactor = 0.28
+            } else {
+                enemy.node.run(.sequence([
+                    .colorize(with: UIColor(red: 0.6, green: 1.0, blue: 1.0, alpha: 1.0), colorBlendFactor: 0.65, duration: 0.04),
+                    .colorize(withColorBlendFactor: 0.28, duration: 0.10)
+                ]))
+            }
             return
         }
 
@@ -5089,10 +5459,15 @@ final class GameScene: SKScene {
         if enemy.kind == .boss, !ignoreBossDamageScale {
             if enemy.bossKind == .rotavirus, !enemy.shieldOpen {
                 bossDamageScale *= 0.34
-                enemy.node.run(.sequence([
-                    .colorize(with: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0), colorBlendFactor: 0.56, duration: 0.04),
-                    .colorize(withColorBlendFactor: 0.26, duration: 0.10)
-                ]))
+                if shouldReduceMotion {
+                    enemy.node.color = UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0)
+                    enemy.node.colorBlendFactor = 0.26
+                } else {
+                    enemy.node.run(.sequence([
+                        .colorize(with: UIColor(red: 0.42, green: 1.0, blue: 1.0, alpha: 1.0), colorBlendFactor: 0.56, duration: 0.04),
+                        .colorize(withColorBlendFactor: 0.26, duration: 0.10)
+                    ]))
+                }
             } else if enemy.bossKind == .lyssavirus, enemy.phase == 3 {
                 bossDamageScale *= 1.38
             } else if enemy.bossKind == .norovirus, activeNorovirusDecoyCount() > 0 {
@@ -5355,6 +5730,10 @@ final class GameScene: SKScene {
 
     private func showLevelCompletePanel() {
         mode = .levelComplete
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
+        tiltVector = .zero
         controlsNode.isHidden = true
         pauseOverlay.isHidden = true
         closePauseSubmenus()
@@ -5379,6 +5758,10 @@ final class GameScene: SKScene {
 
     private func showUpgradeSelection() {
         mode = .upgrade
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
+        tiltVector = .zero
         joystickVector = .zero
         fireTouchIds.removeAll()
         updateJoystickVisual()
@@ -5397,17 +5780,37 @@ final class GameScene: SKScene {
             audio.playSFX(.uiSelect)
             return
         }
+        var unlockCoachMessage: (text: String, completion: CoachCompletion)?
         switch choice {
         case .rapid:
             rapidRank = min(Constants.maxUpgradeRank, rapidRank + 1)
         case .pulse:
+            if pulseRank == 0, !profileStore.hasSeenPulseUnlockCoach {
+                unlockCoachMessage = (
+                    "Complement Pulse unlocked • tap PULSE in danger",
+                    .pulseUnlock
+                )
+            }
             pulseRank = min(Constants.maxUpgradeRank, pulseRank + 1)
         case .dash:
+            if dashRank == 0, !profileStore.hasSeenDashUnlockCoach {
+                unlockCoachMessage = (
+                    "Chemotaxis Dash unlocked • tap DASH to escape",
+                    .dashUnlock
+                )
+            }
             dashRank = min(Constants.maxUpgradeRank, dashRank + 1)
         }
         audio.playSFX(.upgradeSelected)
         haptics.play(.success)
         startNextLevel()
+        if let unlockCoachMessage {
+            enqueueCoachMessages(
+                [unlockCoachMessage.text],
+                initialDelay: 2.2,
+                completionOnLastMessage: unlockCoachMessage.completion
+            )
+        }
     }
 
     private func updateLevelCompleteOverlay() {
@@ -5431,8 +5834,7 @@ final class GameScene: SKScene {
     }
 
     private func updateUpgradeOverlay() {
-        let nextMission = mission(for: level + 1)
-        upgradeIntroLabel?.text = "Section \(level) cleared. Prepare for \(nextMission.name): \(nextMission.term)."
+        upgradeIntroLabel?.text = "Choose one adaptation • Complement unlocks PULSE • Chemotaxis unlocks DASH"
 
         for definition in Constants.upgrades {
             let rank = rank(for: definition.choice)
@@ -5471,7 +5873,7 @@ final class GameScene: SKScene {
             return
         }
 
-        let pulse = 1.0 + sin(CGFloat(sceneTime) * 4.2) * 0.16
+        let pulse = shouldReduceMotion ? 1.0 : 1.0 + sin(CGFloat(sceneTime) * 4.2) * 0.16
         for definition in Constants.upgrades {
             let rank = rank(for: definition.choice)
             for (index, pip) in (upgradePips[definition.choice] ?? []).enumerated() {
@@ -5579,12 +5981,17 @@ final class GameScene: SKScene {
         musicMuted = profileStore.musicMuted
         sfxMuted = profileStore.sfxMuted
         hapticsMuted = profileStore.hapticsMuted
+        motionComfortEnabled = profileStore.motionComfortEnabled
         tiltSensitivity = profileStore.tiltSensitivity
         prefersGlassCombatAbilityControls = profileStore.prefersGlassCombatAbilityControls
         audio.setMusicMuted(musicMuted)
         audio.setSFXMuted(sfxMuted)
         haptics.setMuted(hapticsMuted)
-        setTiltEnabled(profileStore.tiltEnabled, showBannerText: false)
+        tiltEnabled = profileStore.tiltEnabled
+        cancelPendingTiltCalibration()
+        stopMotionInput()
+        tiltHasCalibration = false
+        tiltVector = .zero
         applyNativeAbilityControlVisibility()
         publishCombatAbilityControlState(force: true)
         updatePauseToggleLabels()
@@ -5693,7 +6100,10 @@ final class GameScene: SKScene {
         closeHowToPlay()
     }
 
-    private func startMotionInputIfNeeded() {
+    private func startMotionInputIfNeeded(allowOutsideGameplay: Bool = false) {
+        guard tiltEnabled, mode == .running || allowOutsideGameplay else {
+            return
+        }
         motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
         motionManager.accelerometerUpdateInterval = 1.0 / 60.0
         if motionManager.isDeviceMotionAvailable, !motionManager.isDeviceMotionActive {
@@ -5705,24 +6115,84 @@ final class GameScene: SKScene {
         }
     }
 
-    @discardableResult
-    private func calibrateTilt(showBannerText: Bool) -> Bool {
-        startMotionInputIfNeeded()
-        guard let sensor = rawTiltSensor(), vectorLength(sensor) > 0.001 else {
-            tiltHasCalibration = false
-            tiltVector = .zero
-            updateJoystickVisual()
-            if showBannerText {
-                showBanner("Tilt sensor unavailable here")
-            }
-            return false
-        }
+    private func stopMotionInput() {
+        motionManager.stopDeviceMotionUpdates()
+        motionManager.stopAccelerometerUpdates()
+    }
 
+    private func cancelPendingTiltCalibration() {
+        tiltCalibrationPending = false
+        tiltCalibrationTimeout = 0
+    }
+
+    private func completeTiltCalibration(with sensor: CGVector) {
         tiltNeutral = sensor
         tiltHasCalibration = true
         tiltVector = .zero
         updateJoystickVisual()
-        return true
+    }
+
+    private func calibrateTilt() -> TiltCalibrationResult {
+        guard tiltEnabled else {
+            cancelPendingTiltCalibration()
+            tiltHasCalibration = false
+            tiltVector = .zero
+            updateJoystickVisual()
+            return .unavailable
+        }
+
+        cancelPendingTiltCalibration()
+        startMotionInputIfNeeded(allowOutsideGameplay: true)
+        if let sensor = rawTiltSensor() {
+            completeTiltCalibration(with: sensor)
+            if mode != .running {
+                stopMotionInput()
+            }
+            return .centered
+        }
+
+        guard motionManager.isDeviceMotionAvailable || motionManager.isAccelerometerAvailable else {
+            tiltHasCalibration = false
+            tiltVector = .zero
+            updateJoystickVisual()
+            stopMotionInput()
+            return .unavailable
+        }
+
+        tiltCalibrationPending = true
+        tiltCalibrationTimeout = 1.25
+        tiltCalibrateLabel?.text = "Centering…"
+        return .pending
+    }
+
+    private func updatePendingTiltCalibration(delta: TimeInterval) {
+        guard tiltCalibrationPending else {
+            return
+        }
+
+        if let sensor = rawTiltSensor() {
+            cancelPendingTiltCalibration()
+            completeTiltCalibration(with: sensor)
+            showTiltCalibrationFeedback(success: true)
+            if mode != .running {
+                stopMotionInput()
+            }
+            return
+        }
+
+        tiltCalibrationTimeout = max(0, tiltCalibrationTimeout - delta)
+        guard tiltCalibrationTimeout == 0 else {
+            return
+        }
+
+        cancelPendingTiltCalibration()
+        tiltHasCalibration = false
+        tiltVector = .zero
+        updateJoystickVisual()
+        showTiltCalibrationFeedback(success: false)
+        if mode != .running {
+            stopMotionInput()
+        }
     }
 
     private func updateTiltVector(delta: TimeInterval) {
@@ -5735,7 +6205,7 @@ final class GameScene: SKScene {
         }
 
         startMotionInputIfNeeded()
-        guard let sensor = rawTiltSensor(), vectorLength(sensor) > 0.001 else {
+        guard let sensor = rawTiltSensor() else {
             tiltVector = .zero
             if joystickTouchId == nil {
                 updateJoystickVisual()
@@ -5816,6 +6286,10 @@ final class GameScene: SKScene {
     }
 
     private func updateAudio(delta: TimeInterval) {
+        // A delayed section-clear cue must wait until the player resumes.
+        guard mode != .paused else {
+            return
+        }
         if let cue = pendingMusicCue {
             pendingMusicTimer = max(0, pendingMusicTimer - delta)
             if pendingMusicTimer == 0 {
@@ -5925,6 +6399,30 @@ final class GameScene: SKScene {
         updatePauseToggleLabels()
     }
 
+    private var shouldReduceMotion: Bool {
+        motionComfortEnabled || UIAccessibility.isReduceMotionEnabled
+    }
+
+    private func setMotionComfortEnabled(_ value: Bool) {
+        motionComfortEnabled = value
+        profileStore.motionComfortEnabled = value
+        if shouldReduceMotion {
+            clearScreenShake()
+        }
+        updatePauseToggleLabels()
+    }
+
+    private func showMotionComfortSystemNote() {
+        motionComfortToggleLabel?.removeAllActions()
+        motionComfortToggleLabel?.text = "iOS Reduce Motion is On"
+        motionComfortToggleLabel?.run(.sequence([
+            .wait(forDuration: 1.6),
+            .run { [weak self] in
+                self?.updatePauseToggleLabels()
+            }
+        ]))
+    }
+
     private func setPrefersGlassCombatAbilityControls(_ value: Bool) {
         prefersGlassCombatAbilityControls = value
         profileStore.prefersGlassCombatAbilityControls = value
@@ -5983,32 +6481,44 @@ final class GameScene: SKScene {
         return "Normal"
     }
 
-    private func setTiltEnabled(_ value: Bool, showBannerText: Bool) {
+    private func setTiltEnabled(_ value: Bool, showFeedback: Bool) {
         tiltEnabled = value
         profileStore.tiltEnabled = value
         joystickTouchId = nil
         joystickVector = .zero
         if value {
-            startMotionInputIfNeeded()
             updateJoystickVisual()
-            calibrateTilt(showBannerText: showBannerText)
+            let result = calibrateTilt()
+            if showFeedback {
+                presentTiltCalibrationResult(result)
+            }
         } else {
+            cancelPendingTiltCalibration()
+            stopMotionInput()
             tiltHasCalibration = false
             tiltVector = .zero
             updateJoystickVisual()
-            if showBannerText {
+            if showFeedback {
                 showBanner("Tilt movement disabled")
             }
         }
         updatePauseToggleLabels()
     }
 
+    private func presentTiltCalibrationResult(_ result: TiltCalibrationResult) {
+        switch result {
+        case .centered:
+            showTiltCalibrationFeedback(success: true)
+        case .pending:
+            tiltCalibrateLabel?.text = "Centering…"
+        case .unavailable:
+            showTiltCalibrationFeedback(success: false)
+        }
+    }
+
     private func toggleTiltMode() {
         let enablingTilt = !tiltEnabled
-        setTiltEnabled(enablingTilt, showBannerText: false)
-        if enablingTilt {
-            showTiltCalibrationFeedback(success: tiltHasCalibration)
-        }
+        setTiltEnabled(enablingTilt, showFeedback: true)
     }
 
     private func updatePauseToggleLabels() {
@@ -6016,6 +6526,11 @@ final class GameScene: SKScene {
         musicToggleLabel?.text = musicMuted ? "Music: Off" : "Music: On"
         sfxToggleLabel?.text = sfxMuted ? "Effects: Off" : "Effects: On"
         hapticsToggleLabel?.text = hapticsMuted ? "Haptics: Off" : "Haptics: On"
+        if UIAccessibility.isReduceMotionEnabled {
+            motionComfortToggleLabel?.text = "Motion Comfort: System"
+        } else {
+            motionComfortToggleLabel?.text = motionComfortEnabled ? "Motion Comfort: On" : "Motion Comfort: Off"
+        }
         inputSettingsLabel?.text = "Input Settings"
         howToPlayLabel?.text = "How to Play"
         combatAbilityStyleLabel?.text = shouldUseNativeCombatAbilityControls ? "Ability UI: Glass" : "Ability UI: Classic"
@@ -6444,12 +6959,20 @@ final class GameScene: SKScene {
     }
 
     private func addScreenShake(duration: TimeInterval, magnitude: CGFloat) {
+        guard !shouldReduceMotion else {
+            clearScreenShake()
+            return
+        }
         screenShakeDuration = max(screenShakeDuration, duration)
         screenShakeTimer = max(screenShakeTimer, duration)
         screenShakeMagnitude = max(screenShakeMagnitude, magnitude)
     }
 
     private func updateScreenShake(delta: TimeInterval) {
+        guard !shouldReduceMotion else {
+            clearScreenShake()
+            return
+        }
         guard mode == .running, screenShakeTimer > 0 else {
             clearScreenShake()
             return
@@ -6546,14 +7069,12 @@ final class GameScene: SKScene {
             ? UIColor(red: 1.0, green: 0.90, blue: 0.46, alpha: 0.90)
             : UIColor(red: 0.86, green: 1.0, blue: 1.0, alpha: dashRank > 0 ? 0.58 : 0.34)
         dashButton.glowWidth = dashReady ? 4 : 2
+        dashLabel?.text = "Dash"
         if dashRank <= 0 {
-            dashLabel?.text = "LOCKED"
             dashLabel?.fontColor = UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.72)
         } else if dashReady {
-            dashLabel?.text = "DASH"
             dashLabel?.fontColor = UIColor(red: 1.0, green: 0.92, blue: 0.50, alpha: 1.0)
         } else {
-            dashLabel?.text = String(format: "%.1fs", player.dashCooldown)
             dashLabel?.fontColor = UIColor(red: 0.72, green: 1.0, blue: 1.0, alpha: 0.90)
         }
 
@@ -6563,14 +7084,12 @@ final class GameScene: SKScene {
             ? UIColor(red: 1.0, green: 0.90, blue: 0.46, alpha: 0.90)
             : UIColor(red: 0.86, green: 1.0, blue: 1.0, alpha: pulseRank > 0 ? 0.58 : 0.34)
         pulseButton.glowWidth = pulseReady ? 4 : 2
+        pulseLabel?.text = "Pulse"
         if pulseRank <= 0 {
-            pulseLabel?.text = "LOCKED"
             pulseLabel?.fontColor = UIColor(red: 0.70, green: 0.86, blue: 0.88, alpha: 0.72)
         } else if pulseReady {
-            pulseLabel?.text = "PULSE"
             pulseLabel?.fontColor = UIColor(red: 1.0, green: 0.92, blue: 0.50, alpha: 1.0)
         } else {
-            pulseLabel?.text = String(format: "%.1fs", player.pulseCooldown)
             pulseLabel?.fontColor = UIColor(red: 0.72, green: 1.0, blue: 1.0, alpha: 0.90)
         }
 
@@ -6601,23 +7120,9 @@ final class GameScene: SKScene {
         let pulseReady = pulseUnlocked && player.pulseCooldown <= 0
         let visible = shouldUseNativeCombatAbilityControls && mode == .running && !controlsNode.isHidden
 
-        let dashTitle: String
-        if !dashUnlocked {
-            dashTitle = "LOCKED"
-        } else if dashReady {
-            dashTitle = "DASH"
-        } else {
-            dashTitle = String(format: "%.1fs", player.dashCooldown)
-        }
+        let dashTitle = "Dash"
 
-        let pulseTitle: String
-        if !pulseUnlocked {
-            pulseTitle = "LOCKED"
-        } else if pulseReady {
-            pulseTitle = "PULSE"
-        } else {
-            pulseTitle = String(format: "%.1fs", player.pulseCooldown)
-        }
+        let pulseTitle = "Pulse"
 
         return CombatAbilityControlState(
             isVisible: visible,
@@ -6636,7 +7141,9 @@ final class GameScene: SKScene {
         var bestEnemy: Enemy?
         var bestScore = -CGFloat.infinity
         for enemy in enemies where !enemy.dead && enemy.hp > 0 && enemy.position.x > -enemy.radius - 24 && enemy.position.x < visibleBaseMaxX() + enemy.radius + 120 {
-            let score = enemyLockScore(enemy)
+            guard let score = enemyLockScore(enemy) else {
+                continue
+            }
             if score > bestScore {
                 bestScore = score
                 bestEnemy = enemy
@@ -6645,14 +7152,14 @@ final class GameScene: SKScene {
         return bestEnemy
     }
 
-    private func enemyLockScore(_ enemy: Enemy) -> CGFloat {
+    private func enemyLockScore(_ enemy: Enemy) -> CGFloat? {
         let delta = CGVector(dx: enemy.position.x - player.position.x, dy: enemy.position.y - player.position.y)
         let distance = vectorLength(delta)
         let nearlyTouching = distance < 170
         let inFront = delta.dx > -48
         let inLane = abs(delta.dy) < Constants.lockVerticalRange
         if !nearlyTouching && (!inFront || (distance > Constants.lockTargetRange && !inLane)) {
-            return -1_000_000
+            return nil
         }
         let closeness = 1 - clamp(distance / Constants.lockTargetRange, 0, 1)
         let laneMatch = 1 - clamp(abs(delta.dy) / Constants.lockVerticalRange, 0, 1)
@@ -6875,6 +7382,17 @@ final class GameScene: SKScene {
         let texture = SKTexture(image: image)
         texture.filteringMode = .linear
         return texture
+    }
+
+    private func cachedTextures(from texture: SKTexture, frames: [SpriteFrame]) -> [SKTexture] {
+        frames.map { regionTexture(from: texture, frame: $0) }
+    }
+
+    private func cacheBossFrames(_ kind: BossKind, texture: SKTexture?, frames: [SpriteFrame]) {
+        guard let texture else {
+            return
+        }
+        bossFrameTextures[kind] = cachedTextures(from: texture, frames: frames)
     }
 
     private func regionTexture(from texture: SKTexture, frame: SpriteFrame) -> SKTexture {
@@ -7286,7 +7804,7 @@ private final class AudioSystem {
 
     func pauseSFX(_ cue: AudioCue) {
         guard let player = sfxPlayers[cue], player.isPlaying else {
-            pausedSFX.remove(cue)
+            // Resign-active and background callbacks may pause the same cue twice.
             return
         }
         player.pause()
